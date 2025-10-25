@@ -1,0 +1,53 @@
+{
+  "api_provider": "gemini",
+  "openai": {
+    "api_key": "",
+    "base_url": "https://api.openai.com/v1",
+    "model": "gpt-4o",
+    "temperature": 0.7,
+    "max_tokens": 8000
+  },
+  "deepseek": {
+    "api_key": "",
+    "base_url": "https://api-inference.modelscope.cn/v1",
+    "model": "deepseek-ai/DeepSeek-V3.1",
+    "temperature": 0.7,
+    "max_tokens": 8000
+  },
+  "qwen": {
+    "api_key": "",
+    "base_url": "https://api-inference.modelscope.cn/v1",
+    "model": "Qwen/Qwen3-Next-80B-A3B-Thinking",
+    "temperature": 0.7,
+    "max_tokens": 8000
+  },
+  "gemini": {
+    "api_key": "sk-CyW9puHQwE5io6OwsT039DMFnqFyHJCxG4h49uD8eyEPoENq",
+    "base_url": "https://xiaoai.plus/v1",
+    "model": "gemini-2.5-flash-thinking",
+    "temperature": 0.7,
+    "max_tokens": 8000
+  },
+  "azure": {
+    "api_key": "",
+    "base_url": "",
+    "model": "gpt-4",
+    "api_version": "2024-02-15-preview",
+    "temperature": 0.7,
+    "max_tokens": 8000
+  },
+  "custom": {
+    "api_key": "",
+    "base_url": "",
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "max_tokens": 8000
+  },
+  "pdf_converter": {
+    "api_token": "",
+    "base_url": "https://mineru.net/api/v4/extract",
+    "enable_ocr": true,
+    "enable_formula": false,
+    "max_wait_seconds": 90
+  }
+}

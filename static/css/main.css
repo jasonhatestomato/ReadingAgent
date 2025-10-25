@@ -1,0 +1,1119 @@
+/* ===== 基础布局样式 ===== */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    overflow: hidden;
+}
+
+.main-layout-container {
+    display: flex;
+    height: calc(100vh - 56px); /* 减去导航栏高度 */
+    position: relative;
+    background-color: #f5f5f7; /* 更接近Safari/macOS的背景色 */
+    padding: 4px;
+}
+
+/* ===== 面板基础样式 ===== */
+.layout-panel {
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+    border-right: 1px solid #e9ecef;
+    position: relative;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    border-radius: 12px;
+    margin: 8px 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.layout-panel:last-child {
+    border-right: none;
+    margin-right: 8px;
+}
+
+.layout-panel:first-child {
+    margin-left: 8px;
+}
+
+.panel-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+}
+
+.panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    background-color: #f8f9fa;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* 左侧面板标题为按钮留空间 */
+.pdf-panel .panel-header {
+    padding: 12px 56px 12px 16px; /* 右侧留空间 */
+}
+
+/* 右侧面板标题为按钮留空间 */
+.content-panel .panel-header {
+    padding: 12px 16px 12px 56px; /* 左侧留空间 */
+}
+
+.panel-header h6 {
+    color: #495057;
+    font-weight: 600;
+}
+
+/* ===== PDF面板样式 ===== */
+.pdf-panel {
+    width: 30%;
+    min-width: 300px;
+}
+
+.pdf-panel.collapsed {
+    width: 48px;
+    min-width: 48px;
+}
+
+/* ===== 聊天面板样式 ===== */
+.chat-panel {
+    flex: 1;
+    border-left: 1px solid #e9ecef;
+    border-right: 1px solid #e9ecef;
+    background-color: white;
+}
+
+/* ===== 内容面板样式 ===== */
+.content-panel {
+    width: 30%;
+    min-width: 300px;
+}
+
+.content-panel.collapsed {
+    width: 48px;
+    min-width: 48px;
+}
+
+/* ===== SVG收起按钮样式 ===== */
+.collapse-btn {
+    position: absolute;
+    top: 8px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    color: #6c757d;
+}
+
+.collapse-btn:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
+    color: #495057;
+}
+
+.collapse-btn-left {
+    right: 8px;
+}
+
+.collapse-btn-right {
+    left: 8px;
+}
+
+/* SVG图标样式 - 放大到24x24 */
+.collapse-btn svg {
+    width: 24px;
+    height: 24px;
+    transition: all 0.2s ease;
+}
+
+/* ===== 收起状态内容 ===== */
+.collapsed-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #6c757d;
+    background-color: #f8f9fa;
+}
+
+.collapsed-icon {
+    font-size: 20px;
+    margin-bottom: 8px;
+}
+
+.collapsed-text {
+    font-size: 12px;
+    font-weight: 500;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+}
+
+/* ===== 拖拽调节柄样式 ===== */
+.resize-handle {
+    width: 4px;
+    background-color: transparent;
+    cursor: col-resize;
+    position: relative;
+    flex-shrink: 0;
+    transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover {
+    background-color: #007bff;
+}
+
+.resize-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -2px;
+    right: -2px;
+    bottom: 0;
+    background-color: transparent;
+}
+
+.resize-handle.dragging {
+    background-color: #007bff;
+}
+
+/* ===== PDF相关样式 ===== */
+.upload-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.upload-area {
+    width: 100%;
+    max-width: 300px;
+    height: 200px;
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: #000000;
+    background-color: #f1f3f4;
+}
+
+.upload-icon {
+    font-size: 48px;
+    color: #6c757d;
+    margin-bottom: 16px;
+}
+
+.upload-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.upload-subtext {
+    font-size: 14px;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* 大型操作按钮样式 */
+.paper-selection-buttons {
+    padding: 20px;
+}
+
+.paper-action-btn {
+    width: 100%;
+    padding: 24px 20px;
+    margin-bottom: 16px;
+    background-color: white;
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 16px;
+    font-weight: 500;
+    color: #000000;
+}
+
+.paper-action-btn:hover {
+    border-color: #000000;
+    background-color: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.paper-action-btn i {
+    font-size: 36px;
+    margin-bottom: 12px;
+    color: #495057;
+}
+
+.paper-action-btn:hover i {
+    color: #000000;
+}
+
+/* Modal样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-dialog {
+    background-color: white;
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #000000;
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background-color: #f8f9fa;
+    color: #000000;
+}
+
+.modal-body {
+    padding: 0;
+}
+
+/* 标签页样式 */
+.nav-tabs {
+    display: flex;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px 0;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.nav-tabs li {
+    margin-right: 10px;
+}
+
+.nav-tabs button {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    font-size: 14px;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+}
+
+.nav-tabs button:hover {
+    color: #000000;
+}
+
+.nav-tabs button.active {
+    color: #000000;
+    font-weight: 500;
+    border-bottom-color: #000000;
+}
+
+.tab-content {
+    position: relative;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+/* 本地论文列表样式 */
+#local-papers-container {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.local-paper-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: #ffffff;
+}
+
+.local-paper-item:hover {
+    border-color: #000000;
+    background-color: #f8f9fa;
+    transform: translateX(4px);
+}
+
+.paper-icon {
+    font-size: 32px;
+    color: #dc3545;
+    margin-right: 16px;
+    flex-shrink: 0;
+}
+
+.paper-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.paper-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #212529;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.paper-meta {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.pdf-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.pdf-controls {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e9ecef;
+    background-color: #f8f9fa;
+    flex-shrink: 0;
+}
+
+.page-info {
+    font-size: 14px;
+    color: #495057;
+    margin: 0 8px;
+}
+
+.pdf-viewer {
+    flex: 1;
+    overflow: auto;
+    background-color: #f8f9fa;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 20px;
+}
+
+#pdf-canvas {
+    max-width: 100%;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+}
+
+/* ===== 操作台区域样式 ===== */
+.control-panel-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: white;
+    /* 保持空白，为后续功能预留空间 */
+}
+
+/* ===== Vue聊天组件容器 ===== */
+.vue-chat-component {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== Loading样式 ===== */
+/* 全屏Loading（已废弃，保留兼容） */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.loading-overlay p {
+    color: #495057;
+    margin: 0;
+    font-size: 16px;
+}
+
+/* 聊天区域Loading（只覆盖聊天区域，不阻止页面其他操作） */
+.chat-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: 8px;
+}
+
+.chat-loading-overlay p {
+    color: #495057;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* 确保panel-content是相对定位，作为loading的定位容器 */
+.chat-panel .panel-content {
+    position: relative;
+}
+
+/* ===== 按钮样式优化 ===== */
+.btn-outline-dark {
+    border-color: #000000;
+    color: #000000;
+}
+
+.btn-outline-dark:hover {
+    background-color: #000000;
+    border-color: #000000;
+    color: white;
+}
+
+/* ===== 响应式设计 ===== */
+@media (max-width: 768px) {
+    .pdf-panel,
+    .content-panel {
+        width: 25%;
+        min-width: 250px;
+    }
+    
+    .pdf-panel.collapsed,
+    .content-panel.collapsed {
+        width: 42px;
+        min-width: 42px;
+    }
+    
+    .collapse-btn {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .collapse-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .collapsed-icon {
+        font-size: 16px;
+    }
+    
+    .collapsed-text {
+        font-size: 10px;
+    }
+}
+
+/* ===== 滚动条样式 ===== */
+.pdf-viewer::-webkit-scrollbar,
+.tab-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.pdf-viewer::-webkit-scrollbar-track,
+.tab-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.pdf-viewer::-webkit-scrollbar-thumb,
+.tab-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.pdf-viewer::-webkit-scrollbar-thumb:hover,
+.tab-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* ===== 动画效果 ===== */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.panel-content {
+    animation: slideIn 0.3s ease-out;
+}
+
+/* ===== 清理：移除了所有分析结果相关样式 ===== */
+
+/* ===== 辅助类 ===== */
+.no-select {
+    user-select: none;
+}
+
+.pointer {
+    cursor: pointer;
+}
+
+.text-truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ===== 分析控制面板样式 ===== */
+.control-panel-content {
+    padding: 15px;
+}
+
+.analysis-controls {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid #e9ecef;
+}
+
+.analysis-controls h6 {
+    color: #495057;
+    font-weight: 600;
+}
+
+.analysis-status {
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* ===== 功能按钮网格样式 ===== */
+.function-grid {
+    border-top: 1px solid #e9ecef;
+    padding-top: 15px;
+}
+
+.function-grid h6 {
+    color: #495057;
+    font-weight: 600;
+}
+
+.function-btn {
+    height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.function-btn i {
+    font-size: 24px;
+    margin-bottom: 4px;
+}
+
+.function-btn small {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.function-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.function-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 不同按钮的颜色主题 */
+.function-btn.btn-outline-dark:not(:disabled):hover {
+    background-color: #212529;
+    border-color: #212529;
+    color: white;
+}
+
+.function-btn.btn-outline-secondary:not(:disabled):hover {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+/* ===== Discussion区域聊天界面样式 ===== */
+.chat-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e9ecef;
+    padding: 12px 16px;
+}
+
+.chat-mode-indicator {
+    display: flex;
+    align-items: center;
+}
+
+.chat-messages-container {
+    padding: 16px;
+    overflow-y: auto;
+    max-height: calc(100vh - 300px);
+}
+
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.welcome-message .message {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.message-content {
+    flex-grow: 1;
+}
+
+.message-bubble {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 12px 16px;
+    max-width: 80%;
+    border: 1px solid #e9ecef;
+}
+
+.assistant-message .message-bubble {
+    background: #f8f9fa;
+    border-left: 3px solid #007bff;
+}
+
+.user-message {
+    flex-direction: row-reverse;
+}
+
+.user-message .message-bubble {
+    background: #212529;
+    color: white;
+    border-left: none;
+    border-right: 3px solid #212529;
+}
+
+.user-message .message-avatar {
+    background-color: #212529;
+}
+
+.chat-input-container {
+    padding: 8px 16px 0 16px;
+    border-top: 1px solid #e9ecef;
+    background: #fafbfc;
+}
+
+.chat-input {
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    padding: 6px 10px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.chat-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.chat-send-btn {
+    border-radius: 8px;
+    padding: 6px 14px;
+    background-color: #212529;
+    border-color: #212529;
+    min-height: 38px;
+}
+
+.chat-send-btn:hover {
+    background-color: #000000;
+    border-color: #000000;
+}
+
+.chat-send-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.chat-quick-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* 模型选择器样式 */
+.model-selector .model-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.model-dropdown-toggle {
+    min-width: 140px;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.model-dropdown-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    display: none;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 4px;
+}
+
+.model-dropdown-menu.show {
+    display: block;
+}
+
+.model-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f3f4;
+    transition: background-color 0.2s ease;
+}
+
+.model-option:hover {
+    background-color: #f8f9fa;
+}
+
+.model-option:last-child {
+    border-bottom: none;
+}
+
+.model-option.selected {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.model-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.model-name {
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.model-provider {
+    font-size: 11px;
+    color: #6c757d;
+}
+
+.dropdown-arrow {
+    transition: transform 0.2s ease;
+}
+
+.dropdown-arrow.rotated {
+    transform: rotate(180deg);
+}
+
+/* ===== 右键菜单和多选功能样式 ===== */
+.message-context-menu {
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    min-width: 120px;
+}
+
+.context-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: #374151;
+    transition: background-color 0.2s ease;
+}
+
+.context-menu-item:hover {
+    background-color: #f3f4f6;
+}
+
+.context-menu-item i {
+    color: #000000;
+    width: 16px;
+    text-align: center;
+}
+
+/* 多选工具栏 */
+.multi-select-toolbar {
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* 消息复选框 */
+.message-checkbox {
+    position: absolute;
+    left: -40px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+}
+
+.custom-checkbox {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: white;
+    transition: all 0.2s ease;
+}
+
+.custom-checkbox:hover {
+    border-color: #000000;
+    background-color: #f9fafb;
+}
+
+.custom-checkbox.checked {
+    background-color: #000000;
+    border-color: #000000;
+}
+
+.custom-checkbox.checked i {
+    color: white;
+    font-size: 12px;
+}
+
+.custom-checkbox i {
+    opacity: 0;
+    font-size: 12px;
+    color: white;
+    transition: opacity 0.2s ease;
+}
+
+.custom-checkbox.checked i {
+    opacity: 1;
+}
+
+/* 多选模式下的消息样式调整 */
+.message {
+    position: relative;
+}
+
+/* Toast提示样式 */
+.toast-message {
+    animation: slideInRight 0.3s ease-out, slideOutRight 0.3s ease-out 2.7s;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* Mindmap容器样式 */
+.mindmap-container {
+    width: 100%;
+    height: 500px;
+    min-height: 400px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.mindmap-container svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.mindmap-preview {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #333;
+}
+
+/* Markmap节点样式覆盖 */
+.mindmap-container .markmap-node {
+    cursor: pointer;
+}
+
+.mindmap-container .markmap-link {
+    fill: none;
+    stroke: #ccc;
+    stroke-width: 2px;
+}
+
+.mindmap-container .markmap-circle {
+    fill: #007bff;
+    stroke: #fff;
+    stroke-width: 2px;
+}
+
+.mindmap-container .markmap-text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    fill: #333;
+}
+
+/* 响应式mindmap */
+@media (max-width: 768px) {
+    .mindmap-container {
+        height: 400px;
+        min-height: 300px;
+    }
+}

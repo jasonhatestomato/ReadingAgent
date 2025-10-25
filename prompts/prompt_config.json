@@ -1,0 +1,30 @@
+{
+  "versions": {
+    "v1.0": {
+      "description": "初始版本 - 核心智能体",
+      "created_at": "2025-10-24",
+      "agents": {
+        "guidance": "guidance_agent.md",
+        "control": "control_agent.md",
+        "introduction": "introduction_agent.md",
+        "review": "review_agent.md",
+        "method": "method_agent.md",
+        "result": "result_agent.md",
+        "discussion": "discussion_agent.md",
+        "concept": "concept_agent.md",
+        "general": "general_agent.md"
+      }
+    }
+  },
+  "default_version": "v1.0",
+  "agent_mapping": {
+    "GUIDE_PENDING_REPORT": "guidance",
+    "GUIDE_PENDING_PLAN": "guidance",
+    "CONTROL_ROUTING": "control",
+    "INTRODUCTION": "introduction",
+    "REVIEW": "review",
+    "METHOD": "method",
+    "RESULT": "result",
+    "DISCUSSION": "discussion"
+  }
+}

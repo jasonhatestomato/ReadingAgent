@@ -1,0 +1,22 @@
+# 自动处理换行符
+* text=auto
+
+# Python 文件使用 LF
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+
+# 前端文件使用 LF
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+
+# 二进制文件不转换
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.db binary

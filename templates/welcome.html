@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reading Agent - 欢迎</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
+</head>
+<body>
+    <div class="welcome-container">
+        <!-- Logo 和标题 -->
+        <div class="welcome-header">
+            <div class="logo-container">
+                <i class="fas fa-book-reader logo-icon"></i>
+            </div>
+            <h1 class="welcome-title">Reading Agent</h1>
+            <p class="welcome-subtitle">智能文献阅读助手</p>
+        </div>
+
+        <!-- 用户身份验证区域 -->
+        <div class="auth-section" id="auth-section">
+            <div class="auth-card">
+                <h5 class="auth-title">
+                    <i class="fas fa-user-circle me-2"></i>
+                    请输入您的用户ID
+                </h5>
+                <p class="auth-hint">用于保存您的阅读记录和偏好设置</p>
+                <div class="input-group mb-3">
+                    <input type="text" 
+                           class="form-control user-id-input" 
+                           id="user-id-input"
+                           placeholder="输入您的用户ID（如：user123）"
+                           autocomplete="off">
+                    <button class="btn btn-dark" type="button" id="confirm-user-btn">
+                        <i class="fas fa-arrow-right me-2"></i>确认
+                    </button>
+                </div>
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    首次使用会自动创建新账户
+                </small>
+            </div>
+        </div>
+
+        <!-- 会话列表区域 -->
+        <div class="sessions-section" id="sessions-section" style="display: none;">
+            <div class="sessions-card">
+                <!-- 用户信息栏 -->
+                <div class="user-info-bar">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle me-2"></i>
+                        <span id="current-user-id">用户</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" id="logout-btn">
+                        <i class="fas fa-sign-out-alt me-1"></i>切换用户
+                    </button>
+                </div>
+
+                <!-- 欢迎消息 -->
+                <div class="welcome-message">
+                    <h5>你好！我是你的文献阅读助手 👋</h5>
+                    <p class="mb-0">选择一个历史会话继续，或开始新的文献阅读之旅</p>
+                </div>
+
+                <!-- 历史会话列表 -->
+                <div class="sessions-list-container">
+                    <div class="sessions-list-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            历史会话
+                        </h6>
+                    </div>
+                    
+                    <!-- 会话列表 -->
+                    <div id="sessions-list" class="sessions-list">
+                        <!-- 动态加载会话项 -->
+                    </div>
+
+                    <!-- 空状态 -->
+                    <div id="empty-state" class="empty-state" style="display: none;">
+                        <div class="empty-icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <p class="empty-text">暂无历史会话</p>
+                        <p class="empty-hint">上传您的第一篇文献，开始阅读之旅</p>
+                    </div>
+                </div>
+
+                <!-- 新建会话按钮 -->
+                <div class="new-session-btn-container">
+                    <button class="btn btn-dark btn-lg new-session-btn" id="new-session-btn">
+                        <i class="fas fa-plus-circle me-2"></i>
+                        <span id="new-session-text">开启文献阅读之路</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading 提示 -->
+        <div class="loading-overlay" id="loading-overlay" style="display: none;">
+            <div class="spinner-border text-dark" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-2">加载中...</p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/welcome.js') }}"></script>
+</body>
+</html>

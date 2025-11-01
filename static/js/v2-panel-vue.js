@@ -35,9 +35,10 @@ const PanelComponent = {
                                 class="btn btn-outline-dark w-100 function-btn" 
                                 :disabled="!mindmapEnabled"
                                 @click="handleMindmap"
+                                @click.native="console.log('原生点击事件触发')"
                             >
                                 <i class="fas fa-project-diagram d-block mb-1"></i>
-                                <small>mindmap</small>
+                                <small>mindmap ({{ mindmapEnabled ? '已启用' : '未启用' }})</small>
                             </button>
                         </div>
                         <div class="col-6">
@@ -194,14 +195,20 @@ const PanelComponent = {
         
         // 处理mindmap点击
         async handleMindmap() {
-            console.log('Mindmap按钮点击，当前状态:', {
+            console.log('🔴 Mindmap按钮点击事件触发');
+            console.log('📋 当前状态:', {
                 mindmapEnabled: this.mindmapEnabled,
                 isPdfLoaded: this.isPdfLoaded,
-                currentView: this.currentView
+                currentView: this.currentView,
+                mindmapData: !!this.mindmapData
+            });
+            console.log('🔍 Session ID 信息:', {
+                windowCurrentSessionId: window.currentSessionId,
+                vueChatSessionId: window.vueChat?.sessionId
             });
             
             if (!this.mindmapEnabled) {
-                console.warn('Mindmap按钮未启用，取消操作');
+                console.warn('⚠️ Mindmap按钮未启用，取消操作');
                 return;
             }
             
@@ -220,20 +227,37 @@ const PanelComponent = {
             this.currentView = 'mindmap';
             
             try {
-                const response = await fetch('/generate_mindmap', {
+                // 获取当前 session_id（从全局变量或聊天组件）
+                const sessionId = window.currentSessionId || 
+                                 (window.vueChat && window.vueChat.sessionId);
+                
+                if (!sessionId) {
+                    throw new Error('请先上传论文');
+                }
+                
+                console.log('📡 发送思维导图生成请求，session_id:', sessionId);
+                
+                const response = await fetch('/api/generate-mindmap', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
                 });
                 
                 if (!response.ok) {
-                    throw new Error('网络请求失败');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '网络请求失败');
                 }
                 
                 const data = await response.json();
                 
+                console.log('📥 思维导图 API 返回数据:', data);
+                console.log('📝 Markdown 内容:', data.markdown);
+                console.log('📊 Markdown 长度:', data.markdown?.length);
+                
                 if (data.success) {
                     this.mindmapData = data.markdown;
-                    console.log('思维导图生成成功:', data.from_cache ? '来自缓存' : '新生成');
+                    console.log('✅ 思维导图生成成功:', data.from_cache ? '来自缓存' : '新生成');
+                    console.log('💾 已保存到 mindmapData:', this.mindmapData?.substring(0, 100));
                     
                     this.$nextTick(() => {
                         this.renderMindmap();
@@ -272,16 +296,28 @@ const PanelComponent = {
                 container.appendChild(svg);
                 
                 // 使用markmap渲染
-                if (window.markmap && window.markmap.Markmap) {
-                    const { Markmap, deriveOptions, transform } = window.markmap;
-                    const { root, features } = transform(this.mindmapData);
-                    const options = deriveOptions(features);
+                console.log('🔍 检查 window.markmap:', window.markmap);
+                console.log('🔍 可用的方法:', Object.keys(window.markmap));
+                
+                if (window.markmap && window.markmap.Markmap && window.markmap.Transformer) {
+                    const { Markmap, Transformer } = window.markmap;
                     
-                    const mm = Markmap.create(svg, options);
+                    // 创建 Transformer 实例
+                    const transformer = new Transformer();
+                    
+                    console.log('🔧 Transformer 创建成功');
+                    
+                    // 转换 markdown 为树结构
+                    const { root } = transformer.transform(this.mindmapData);
+                    
+                    console.log('🌳 Markdown 转换成功，root:', root);
+                    
+                    // 创建 Markmap 实例并渲染
+                    const mm = Markmap.create(svg);
                     mm.setData(root);
                     mm.fit();
                     
-                    console.log('思维导图渲染完成');
+                    console.log('✅ 思维导图渲染完成');
                 } else {
                     throw new Error('Markmap库未正确加载');
                 }
@@ -298,15 +334,32 @@ const PanelComponent = {
             const maxAttempts = 20; // 最多等待4秒
             
             while (attempts < maxAttempts) {
-                if (window.markmap && window.markmap.Markmap && window.d3) {
-                    console.log('Markmap库已加载');
+                const status = {
+                    markmap: !!window.markmap,
+                    d3: !!window.d3,
+                    markmapMarkmap: !!(window.markmap && window.markmap.Markmap),
+                    markmapTransformer: !!(window.markmap && window.markmap.Transformer)
+                };
+                
+                console.log(`🔄 [${attempts+1}/${maxAttempts}] 检查库加载状态:`, status);
+                
+                // 新版本 Markmap 把所有东西都放在 window.markmap 中
+                if (window.markmap && window.markmap.Markmap && 
+                    window.markmap.Transformer && window.d3) {
+                    console.log('✅ Markmap 库已全部加载');
                     return;
                 }
                 await new Promise(resolve => setTimeout(resolve, 200));
                 attempts++;
             }
             
-            throw new Error('等待库加载超时');
+            const finalStatus = {
+                markmap: !!window.markmap,
+                d3: !!window.d3,
+                markmapKeys: window.markmap ? Object.keys(window.markmap) : []
+            };
+            console.warn('⚠️ Markmap 库加载超时，当前状态:', finalStatus);
+            throw new Error('Markmap库加载超时');
         },
         
         // 降级到文本显示
@@ -395,6 +448,16 @@ ${this.mindmapData}
         // 暴露组件实例到全局
         window.vuePanel = this;
         console.log('Vue Panel组件初始化完成');
+        console.log('✅ Panel methods 可用:', {
+            handleMindmap: typeof this.handleMindmap,
+            handleNotes: typeof this.handleNotes,
+            generateSummary: typeof this.generateSummary
+        });
+        console.log('📊 Panel initial state:', {
+            mindmapEnabled: this.mindmapEnabled,
+            notesEnabled: this.notesEnabled,
+            isPdfLoaded: this.isPdfLoaded
+        });
     }
 };
 

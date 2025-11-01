@@ -242,6 +242,8 @@ async function handleLocalPaperSelect(filename) {
             window.vueChat.chatHistory = [];
             window.vueChat.pdfLoaded = true;
             window.vueChat.sessionId = data.session_id;
+            // 同时设置全局 sessionId，供 Panel 组件使用
+            window.currentSessionId = data.session_id;
             // 重要：启用输入框
             if (typeof window.vueChat.setDocumentLoaded === 'function') {
                 window.vueChat.setDocumentLoaded(true);
@@ -251,12 +253,17 @@ async function handleLocalPaperSelect(filename) {
         
         showLoading(false);
         
+        // 通知 Panel 组件 PDF 已加载
+        notifyDocumentStatus(true);
+        
         // 处理 Markdown 转换（如果需要）
         if (!data.has_markdown && data.has_pdf) {
             console.log('PDF 没有对应的 Markdown，触发转换...');
             await convertPdfToMarkdown(data.session_id);
-        } else {
-            console.log('Markdown 已存在，跳过转换');
+        } else if (data.has_markdown) {
+            console.log('✅ Markdown 已存在，跳过转换');
+            // 重要：即使跳过转换，也要通知组件 Markdown 已就绪
+            notifyMarkdownReady(true);
         }
         
         // 自动生成导读报告
@@ -290,6 +297,9 @@ async function convertPdfToMarkdown(sessionId) {
         }
         
         console.log('✅ PDF 转换完成');
+        
+        // 通知 Panel 组件 Markdown 已就绪
+        notifyMarkdownReady(true);
         
         if (window.vueChat) {
             window.vueChat.chatHistory.push({
@@ -464,6 +474,9 @@ async function handleFileUpload(file) {
             window.vueChat.sessionId = result.session_id;
             window.vueChat.pdfLoaded = true;
         }
+        
+        // 通知 Panel 组件 PDF 已加载
+        notifyDocumentStatus(true);
         
         // 显示分析控制面板
         showAnalysisControls(true);

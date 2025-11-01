@@ -19,8 +19,8 @@ const ChatComponent = {
                             <i class="fas fa-check"></i>
                         </div>
                     </div>
-                    <div :class="['message-avatar', msg.role === 'user' ? 'bg-dark' : 'bg-primary']">
-                        <i :class="['fas', msg.role === 'user' ? 'fa-user' : 'fa-robot', 'text-white']"></i>
+                    <div class="message-avatar" :class="msg.role === 'user' ? 'bg-dark' : ''">
+                        <i :class="['fas', msg.role === 'user' ? 'fa-user' : 'fa-robot', msg.role === 'user' ? 'text-white' : '']"></i>
                     </div>
                     <div class="message-content">
                         <div class="message-bubble">
@@ -116,6 +116,7 @@ const ChatComponent = {
             contextMenu: null,
             multiSelectMode: false,
             selectedMessages: new Set(),
+            sessionId: null, // 当前会话ID
         };
     },
     
@@ -126,6 +127,25 @@ const ChatComponent = {
             }
             return this.isInputEnabled ? '输入你的问题...' : '请上传PDF文献开始对话';
         }
+    },
+    
+    mounted() {
+        this.initializeElements();
+        this.bindEvents();
+        this.setupTextareaAutoResize();
+    },
+    
+    updated() {
+        // 在 DOM 更新后渲染 Mermaid 图表
+        this.$nextTick(() => {
+            // 使用 requestAnimationFrame 确保 DOM 完全渲染
+            requestAnimationFrame(() => {
+                // 再添加一个 setTimeout 确保 v-html 完全完成
+                setTimeout(() => {
+                    this.renderMermaidDiagrams();
+                }, 200);
+            });
+        });
     },
     
     methods: {
@@ -242,6 +262,15 @@ const ChatComponent = {
                                     // 流结束
                                     this.chatHistory[messageIndex].isStreaming = false;
                                     console.log('✅ 流式输出完成，最终状态:', parsed.state);
+                                    
+                                    // 流式输出完成后，手动触发 Mermaid 渲染
+                                    this.$nextTick(() => {
+                                        requestAnimationFrame(() => {
+                                            setTimeout(() => {
+                                                this.renderMermaidDiagrams();
+                                            }, 300);
+                                        });
+                                    });
                                 } else if (parsed.error) {
                                     // 错误处理
                                     this.chatHistory[messageIndex].content = parsed.error;
@@ -281,9 +310,84 @@ const ChatComponent = {
         },
         
         formatMessage(text) {
-            // Basic markdown rendering for now
-            return marked ? marked.parse(text) : text;
+            // 直接使用 marked 渲染，让 Mermaid 代码以 <code class="language-mermaid"> 的形式保留
+            let html = marked ? marked.parse(text) : text;
+            return html;
         },
+        
+        async renderMermaidDiagrams() {
+            // 等待 Mermaid 加载
+            await this.$nextTick();
+            
+            // 检查 Mermaid 是否加载
+            if (!window.mermaid) {
+                console.error('⚠️ Mermaid 库未加载，window.mermaid 为 undefined');
+                return;
+            }
+            
+            console.log('🔍 Mermaid 已加载，开始查找代码块...');
+            
+            // 查找所有 Mermaid 代码块（Marked.js 会将其渲染为 <pre><code class="language-mermaid">）
+            const codeBlocks = document.querySelectorAll('pre code.language-mermaid:not([data-processed])');
+            console.log(`🔍 找到 ${codeBlocks.length} 个 Mermaid 代码块`);
+            
+            if (codeBlocks.length === 0) {
+                return;
+            }
+            
+            // 逐个转换和渲染
+            for (let i = 0; i < codeBlocks.length; i++) {
+                const codeBlock = codeBlocks[i];
+                try {
+                    // 标记为已处理
+                    codeBlock.setAttribute('data-processed', 'true');
+                    
+                    // 获取 Mermaid 代码
+                    const code = codeBlock.textContent.trim();
+                    
+                    // 清理代码：移除可能导致解析错误的字符
+                    const cleanedCode = code
+                        .replace(/[""`´'']/g, '')  // 移除所有类型的引号
+                        .replace(/（/g, '(')        // 统一括号为英文
+                        .replace(/）/g, ')');
+                    
+                    const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+                    
+                    console.log(`🎨 [${i+1}/${codeBlocks.length}] 渲染图表 ${id}`);
+                    console.log('📝 原始代码:', code.substring(0, 100) + '...');
+                    console.log('🧹 清理后代码:', cleanedCode.substring(0, 100) + '...');
+                    
+                    // 使用 mermaid.render 方法
+                    const { svg } = await window.mermaid.render(id + '-svg', cleanedCode);
+                    
+                    // 创建容器并替换代码块
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'mermaid-wrapper';
+                    wrapper.innerHTML = svg;
+                    
+                    // 替换整个 <pre> 标签
+                    const preElement = codeBlock.parentElement;
+                    preElement.parentElement.replaceChild(wrapper, preElement);
+                    
+                    console.log(`✅ [${i+1}/${codeBlocks.length}] 成功渲染图表 ${id}`);
+                } catch (error) {
+                    console.error(`❌ [${i+1}/${codeBlocks.length}] 渲染图表失败:`, error);
+                    console.error('错误详情:', error.message, error.stack);
+                    codeBlock.removeAttribute('data-processed');
+                    
+                    // 显示错误信息
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'mermaid-error';
+                    errorDiv.style.cssText = 'padding: 10px; background: #fee; border: 1px solid #fcc; border-radius: 4px; margin: 10px 0;';
+                    errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #c00;"></i>
+                        <span style="color: #c00; margin-left: 5px;">图表渲染失败：${error.message || '未知错误'}</span>`;
+                    
+                    const preElement = codeBlock.parentElement;
+                    preElement.parentElement.replaceChild(errorDiv, preElement);
+                }
+            }
+        },
+
         
         scrollToBottom() {
             this.$nextTick(() => {

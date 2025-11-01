@@ -40,7 +40,8 @@
 >     style A fill:#cde4ff,stroke:#666,stroke-width:2px
 >     style B fill:#fff0c3,stroke:#666,stroke-width:2px
 >     style C fill:#c7f0d3,stroke:#666,stroke-width:2px
-> 现在，让我们用这个框架来具体分析您的问题。”
+> ```
+> 现在，让我们用这个框架来具体分析您的问题。"
 **第二步：应用框架进行示范回答**
 在输出完“脚手架”后，紧接着，你必须应用“解构-分析-审视”的结构来回答用户的具体问题，作为一次示范。
 # 具体问题回答范例

@@ -66,17 +66,6 @@ class AgentOrchestrator:
             print(f"🔄 检测到新问题，从状态 {current_state} 重新进行路由判断")
             return self._handle_control_routing(session_id, user_message, session_data)
         
-        # 特殊处理：如果在GUIDE_PENDING_REPORT状态，用户直接问内容性问题（场景三）
-        # 直接跳过guidance_agent，转到CONTROL_ROUTING
-        if current_state == 'GUIDE_PENDING_REPORT' and user_message:
-            content_question_keywords = ['什么', '如何', '为什么', '哪些', '怎样', '理论', '方法', '结果', '结论', '发现', '依据', '贡献']
-            is_content_question = any(kw in user_message for kw in content_question_keywords)
-            
-            if is_content_question:
-                print("🔄 检测到场景三（用户直接问内容问题），跳过guidance_agent，直接路由")
-                # 直接调用control_routing处理
-                return self._handle_control_routing(session_id, user_message, session_data)
-        
         # 1. 根据状态获取对应的智能体
         agent_name = self._get_agent_by_state(current_state)
         
@@ -93,6 +82,43 @@ class AgentOrchestrator:
             user_message=user_message,
             chat_history=session_data.get('session_data', {}).get('chat_history', [])
         )
+        
+        # 🔍 调试：打印 LLM 响应
+        print(f"\n{'='*60}")
+        print(f"🤖 智能体 [{AGENT_DISPLAY_NAMES.get(agent_name, agent_name)}] 响应:")
+        print(f"{'='*60}")
+        print(f"响应长度: {len(assistant_response)} 字符")
+        if len(assistant_response) < 200:
+            print(f"响应内容: {assistant_response}")
+        else:
+            print(f"响应前200字: {assistant_response[:200]}...")
+        print(f"{'='*60}\n")
+        
+        # 🔍 检查空响应
+        if not assistant_response or len(assistant_response.strip()) == 0:
+            print(f"⚠️  警告：智能体返回了空响应！")
+            print(f"   当前状态: {current_state}")
+            print(f"   智能体: {agent_name}")
+            print(f"   用户消息: {user_message}")
+            # 返回友好提示而不是空字符串
+            assistant_response = "抱歉，我暂时无法生成回复。请稍后再试或换个方式提问。"
+        
+        # 🔍 检测场景三的特殊路由标记（guidance_agent专用）
+        if agent_name == 'guidance' and current_state == 'GUIDE_PENDING_PLAN':
+            import json
+            import re
+            try:
+                # 尝试提取JSON标记
+                json_match = re.search(r'\{[^}]*"route"[^}]*\}', assistant_response)
+                if json_match:
+                    route_data = json.loads(json_match.group())
+                    if route_data.get('route') == 'content_question':
+                        print("🔄 检测到场景三路由标记，自动转发到 control_routing")
+                        # 直接调用 control_routing 处理用户的原始问题
+                        # 注意：这里直接返回，不再返回包含JSON的guidance回复
+                        return self._handle_control_routing(session_id, user_message, session_data)
+            except Exception as e:
+                print(f"⚠️  解析路由标记失败（可能不是场景三）: {e}")
         
         # 5. 判断是否需要状态转换
         new_state = self._determine_next_state(
@@ -196,7 +222,28 @@ class AgentOrchestrator:
         )
         
         # 6. 更新agent_inquiry_status：标记该智能体已被询问
+        # 在更新前记录当前状态，用于判断模式
+        session_dict = session_data.get('session_data', {})
+        agent_inquiry_status = session_dict.get('agent_inquiry_status', {})
+        is_first_inquiry = not agent_inquiry_status.get(target_agent, False)
+        
         self._update_agent_inquiry_status(session_id, target_agent)
+        
+        # 🔧 调试标签：在回复末尾添加智能体和模式信息
+        mode_text = "首次模式" if is_first_inquiry else "常规模式"
+        # 简化的智能体名称映射
+        agent_short_names = {
+            'introduction': '引言',
+            'review': '综述',
+            'method': '方法',
+            'result': '结果',
+            'discussion': '讨论',
+            'general': '通用',
+            'concept': '概念'
+        }
+        agent_short = agent_short_names.get(target_agent, target_agent)
+        debug_tag = f"\n\n---\n【{agent_short}】【{mode_text}】"
+        assistant_response += debug_tag
         
         # 7. 确定新状态（根据目标agent映射到状态）
         agent_to_state = {
@@ -310,10 +357,22 @@ class AgentOrchestrator:
         # 判断该智能体是否已被询问
         is_first_inquiry = not agent_inquiry_status.get(target_agent, False)
         
-        # 添加模块交互状态信息
-        status_text = "模块交互状态：" + ("未询问" if is_first_inquiry else "已询问")
+        # 添加模块交互状态信息（格式更清晰）
+        status_text = f"\n\n===== 重要：模块交互状态 =====\n"
+        status_text += f"当前模块: {AGENT_DISPLAY_NAMES.get(target_agent, target_agent)}\n"
+        status_text += f"交互状态: {'未询问（首次询问）' if is_first_inquiry else '已询问（非首次询问）'}\n"
+        if is_first_inquiry:
+            status_text += "⚠️ 这是用户首次询问此模块，请使用「首次引导模式」输出！\n"
+        else:
+            status_text += "✅ 用户已询问过此模块，请使用「常规模式」输出！\n"
+        status_text += "============================="
         
-        return f"{base_context}\n\n{status_text}"
+        print(f"\n🔍 智能体状态检测:")
+        print(f"   目标智能体: {target_agent}")
+        print(f"   是否首次询问: {is_first_inquiry}")
+        print(f"   当前状态记录: {agent_inquiry_status}")
+        
+        return f"{base_context}{status_text}"
     
     def _update_agent_inquiry_status(self, session_id: str, agent_name: str):
         """
@@ -433,11 +492,22 @@ class AgentOrchestrator:
                     max_tokens=self.max_tokens
                 )
                 
+                # 检查响应是否有效
+                if not response.choices or len(response.choices) == 0:
+                    raise ValueError("API 返回的 choices 列表为空")
+                
                 assistant_response = response.choices[0].message.content
+                
+                # 检查内容是否为空
+                if assistant_response is None:
+                    raise ValueError("API 返回的内容为 None")
+                
                 return assistant_response
             
             except Exception as e:
                 print(f"❌ OpenAI API 调用失败 (尝试 {attempt + 1}/{self.max_retries}): {e}")
+                print(f"   模型: {self.model}")
+                print(f"   消息数量: {len(messages)}")
                 
                 if attempt < self.max_retries - 1:
                     # 指数退避
@@ -519,7 +589,7 @@ class AgentOrchestrator:
             })
         
         try:
-            # 调用 OpenAI API（流式）
+            # 调用 OpenAI API (流式)
             stream = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -530,12 +600,19 @@ class AgentOrchestrator:
             
             # 逐块返回内容
             for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
+                # 检查 chunk 是否有 choices
+                if not chunk.choices or len(chunk.choices) == 0:
+                    continue
+                
+                # 检查 delta 是否有 content
+                delta = chunk.choices[0].delta
+                if hasattr(delta, 'content') and delta.content is not None:
+                    yield delta.content
             
         except Exception as e:
             print(f"❌ 流式 API 调用失败: {e}")
-            yield f"抱歉，我遇到了一些问题无法回复。请稍后再试。\n\n错误详情：{str(e)}"
+            print(f"   模型: {self.model}")
+            yield f"\n\n抱歉，我遇到了一些问题无法回复。请稍后再试。\n\n错误详情：{str(e)}"
     
     def process_message_stream(
         self,
@@ -556,29 +633,59 @@ class AgentOrchestrator:
         """
         current_state = session_data.get('current_state', 'GUIDE_PENDING_REPORT')
         
-        # 状态路由逻辑（与非流式相同）
+        # 状态路由逻辑：章节状态直接路由
         chapter_states = ['INTRODUCTION', 'REVIEW', 'METHOD', 'RESULT', 'DISCUSSION', 'CONTROL_ROUTING']
         if current_state in chapter_states and user_message:
-            # 对于路由逻辑，使用非流式快速判断
-            assistant_response, new_state = self._handle_control_routing(session_id, user_message, session_data)
-            yield {'content': assistant_response, 'state': new_state, 'done': True}
+            # 流式版本：逐字返回
+            for chunk_data in self._handle_control_routing_stream(session_id, user_message, session_data):
+                yield chunk_data
             return
-        
-        if current_state == 'GUIDE_PENDING_REPORT' and user_message:
-            content_question_keywords = ['什么', '如何', '为什么', '哪些', '怎样', '理论', '方法', '结果', '结论', '发现', '依据', '贡献']
-            is_content_question = any(kw in user_message for kw in content_question_keywords)
-            
-            if is_content_question:
-                assistant_response, new_state = self._handle_control_routing(session_id, user_message, session_data)
-                yield {'content': assistant_response, 'state': new_state, 'done': True}
-                return
         
         # 获取智能体和 Prompt
         agent_name = self._get_agent_by_state(current_state)
         system_prompt = prompt_manager.get_prompt(agent_name)
         context = self._build_context(session_data)
         
-        # 流式调用 LLM
+        # 特殊处理 guidance_agent 的场景三：先完整收集响应，检测路由标记
+        if agent_name == 'guidance' and current_state == 'GUIDE_PENDING_PLAN':
+            # 先收集完整响应（不流式输出）
+            full_response = ""
+            for chunk in self._call_llm_stream(
+                system_prompt=system_prompt,
+                context=context,
+                user_message=user_message,
+                chat_history=session_data.get('session_data', {}).get('chat_history', [])
+            ):
+                full_response += chunk
+            
+            # 检测场景三的路由标记
+            import json
+            import re
+            try:
+                json_match = re.search(r'\{[^}]*"route"[^}]*\}', full_response)
+                if json_match:
+                    route_data = json.loads(json_match.group())
+                    if route_data.get('route') == 'content_question':
+                        print("🔄 检测到场景三路由标记，自动转发到 control_routing")
+                        # 直接流式输出真正的答案，不输出 guidance 的响应（包含JSON）
+                        for chunk_data in self._handle_control_routing_stream(session_id, user_message, session_data):
+                            yield chunk_data
+                        return
+            except Exception as e:
+                print(f"⚠️  解析路由标记失败: {e}")
+            
+            # 如果没有路由标记，正常流式输出 guidance 的响应
+            for i, char in enumerate(full_response):
+                yield {'content': char, 'done': False}
+            yield {'event': 'done', 'state': self._determine_next_state(
+                current_state=current_state,
+                user_message=user_message,
+                assistant_response=full_response,
+                session_data=session_data
+            ), 'done': True}
+            return
+        
+        # 其他智能体：正常流式调用 LLM
         full_response = ""
         for chunk in self._call_llm_stream(
             system_prompt=system_prompt,
@@ -587,7 +694,34 @@ class AgentOrchestrator:
             chat_history=session_data.get('session_data', {}).get('chat_history', [])
         ):
             full_response += chunk
-            yield {'content': chunk, 'state': current_state, 'done': False}
+            yield {'content': chunk, 'done': False}
+        
+        # 🔧 调试标签：仅为非 guidance 智能体添加（导读智能体不需要）
+        if agent_name != 'guidance':
+            # 获取智能体状态，判断模式
+            session_dict = session_data.get('session_data', {})
+            agent_inquiry_status = session_dict.get('agent_inquiry_status', {})
+            is_first_inquiry = not agent_inquiry_status.get(agent_name, False)
+            
+            mode_text = "首次模式" if is_first_inquiry else "常规模式"
+            # 简化的智能体名称映射
+            agent_short_names = {
+                'introduction': '引言',
+                'review': '综述',
+                'method': '方法',
+                'result': '结果',
+                'discussion': '讨论',
+                'general': '通用',
+                'concept': '概念'
+            }
+            agent_short = agent_short_names.get(agent_name, agent_name)
+            debug_tag = f"\n\n---\n【{agent_short}】【{mode_text}】"
+            
+            # 逐字输出调试标签
+            for char in debug_tag:
+                yield {'content': char, 'done': False}
+            
+            full_response += debug_tag
         
         # 判断新状态
         new_state = self._determine_next_state(
@@ -598,7 +732,131 @@ class AgentOrchestrator:
         )
         
         # 发送完成信号
-        yield {'content': '', 'state': new_state, 'done': True, 'full_response': full_response}
+        yield {'done': True, 'state': new_state, 'full_response': full_response}
+    
+    def _handle_control_routing_stream(
+        self,
+        session_id: str,
+        user_message: str,
+        session_data: Dict
+    ):
+        """
+        处理CONTROL_ROUTING状态（流式版本）
+        
+        Args:
+            session_id: 会话 ID
+            user_message: 用户消息
+            session_data: 会话数据
+        
+        Yields:
+            dict: 包含 content 和 state 的字典
+        """
+        # 1. 调用control_agent进行路由决策（非流式，快速判断）
+        control_prompt = prompt_manager.get_prompt('control')
+        context = self._build_context(session_data)
+        
+        routing_response = self._call_llm(
+            system_prompt=control_prompt,
+            context=context,
+            user_message=f"用户问题：{user_message}\n\n请分析这个问题应该路由给哪个智能体。",
+            chat_history=[]
+        )
+        
+        print("\n" + "="*60)
+        print("🎯 中控智能体 (Control Agent) 路由决策：")
+        print("="*60)
+        print(routing_response)
+        print("="*60 + "\n")
+        
+        # 2. 解析路由决策
+        import json
+        import re
+        
+        target_agent = None
+        try:
+            # 尝试提取JSON
+            try:
+                routing_json = json.loads(routing_response.strip())
+                target_agent = routing_json.get('agent_name')
+            except:
+                json_block_match = re.search(r'```json\s*(\{[^}]+\})\s*```', routing_response, re.DOTALL)
+                if json_block_match:
+                    routing_json = json.loads(json_block_match.group(1))
+                    target_agent = routing_json.get('agent_name')
+                else:
+                    json_match = re.search(r'\{[^}]+\}', routing_response)
+                    if json_match:
+                        routing_json = json.loads(json_match.group())
+                        target_agent = routing_json.get('agent_name')
+            
+            if target_agent:
+                print(f"✅ 路由决策成功: {target_agent}")
+        except Exception as e:
+            print(f"❌ 解析路由决策失败: {e}")
+        
+        if not target_agent:
+            print("⚠️  无法解析路由决策，使用general作为默认")
+            target_agent = 'general'
+        
+        # 标准化agent名称
+        if target_agent.endswith('_agent'):
+            target_agent = target_agent.replace('_agent', '')
+        
+        # 3. 构建context并调用目标智能体（流式输出）
+        context_with_status = self._build_context_with_agent_status(session_data, target_agent)
+        target_prompt = prompt_manager.get_prompt(target_agent)
+        
+        # 在调用前记录当前状态，用于判断模式
+        session_dict = session_data.get('session_data', {})
+        agent_inquiry_status = session_dict.get('agent_inquiry_status', {})
+        is_first_inquiry = not agent_inquiry_status.get(target_agent, False)
+        
+        full_response = ""
+        for chunk in self._call_llm_stream(
+            system_prompt=target_prompt,
+            context=context_with_status,
+            user_message=user_message,
+            chat_history=session_data.get('session_data', {}).get('chat_history', [])
+        ):
+            full_response += chunk
+            yield {'content': chunk, 'done': False}
+        
+        # 🔧 调试标签：在流式输出末尾添加智能体和模式信息
+        mode_text = "首次模式" if is_first_inquiry else "常规模式"
+        # 简化的智能体名称映射
+        agent_short_names = {
+            'introduction': '引言',
+            'review': '综述',
+            'method': '方法',
+            'result': '结果',
+            'discussion': '讨论',
+            'general': '通用',
+            'concept': '概念'
+        }
+        agent_short = agent_short_names.get(target_agent, target_agent)
+        debug_tag = f"\n\n---\n【{agent_short}】【{mode_text}】"
+        
+        # 逐字输出调试标签
+        for char in debug_tag:
+            yield {'content': char, 'done': False}
+        
+        full_response += debug_tag
+        
+        # 4. 更新agent_inquiry_status
+        self._update_agent_inquiry_status(session_id, target_agent)
+        
+        # 5. 确定新状态
+        agent_to_state = {
+            'introduction': 'INTRODUCTION',
+            'review': 'REVIEW',
+            'method': 'METHOD',
+            'result': 'RESULT',
+            'discussion': 'DISCUSSION',
+        }
+        new_state = agent_to_state.get(target_agent, 'CONTROL_ROUTING')
+        
+        # 6. 发送完成信号
+        yield {'done': True, 'state': new_state, 'full_response': full_response}
     
     def _determine_next_state(
         self,
@@ -632,29 +890,32 @@ class AgentOrchestrator:
         if current_state == 'GUIDE_PENDING_REPORT':
             # 如果已经有论文，并且是空消息触发（首次自动触发）
             if session_data.get('paper_path') and user_message == '':
-                print("🔄 检测到首次自动触发（空消息），保持在 GUIDE_PENDING_REPORT 等待用户回应")
-                # 保持在当前状态，等待用户回复后再转换
-                return current_state
+                print("🔄 检测到首次自动触发（空消息），转到 GUIDE_PENDING_PLAN 等待用户回应")
+                # 生成初始报告后，转到 GUIDE_PENDING_PLAN，等待用户回复兴趣点
+                return 'GUIDE_PENDING_PLAN'
+            
             # 如果用户已经回复了（非空消息），需要判断回复类型
             if session_data.get('paper_path') and user_message != '':
-                # 检测是否是内容性问题（场景三）
-                content_question_keywords = ['什么', '如何', '为什么', '哪些', '怎样', '理论', '方法', '结果', '结论', '发现']
-                is_content_question = any(kw in user_message for kw in content_question_keywords)
-                
-                if is_content_question:
-                    print("🔄 检测到内容性问题（场景三），直接转到 CONTROL_ROUTING")
-                    return 'CONTROL_ROUTING'
-                else:
-                    print("🔄 用户回复了目标和背景信息，转到 GUIDE_PENDING_PLAN")
-                    return 'GUIDE_PENDING_PLAN'
+                # 检测是否是内容性问题（场景三） - 这部分逻辑已经在 process_message 中处理
+                # 如果执行到这里，说明是场景一或场景二，应该生成阅读路径后转到 CONTROL_ROUTING
+                print("🔄 用户回复了目标/背景信息，保持在 GUIDE_PENDING_PLAN")
+                return 'GUIDE_PENDING_PLAN'
+            
             return current_state
         
         # 2. GUIDE_PENDING_PLAN: 引导智能体生成阅读计划
         if current_state == 'GUIDE_PENDING_PLAN':
-            # 检测是否已生成阅读计划（简单检测关键词）
-            if '阅读计划' in assistant_response or '建议' in assistant_response or '路径' in assistant_response:
-                print("🔄 检测到阅读计划已生成，转到 CONTROL_ROUTING")
+            # 如果是第一次进入这个状态（空消息），等待用户回复
+            if user_message == '':
+                print("🔄 第一次进入 GUIDE_PENDING_PLAN（导读报告已生成），等待用户回复")
+                return current_state
+            
+            # 如果用户已回复，检测是否已生成阅读计划
+            if user_message != '':
+                # 生成了个性化阅读路径或沙漏式阅读法后，转到 CONTROL_ROUTING
+                print("🔄 用户已回复目标信息，引导智能体应生成路径，转到 CONTROL_ROUTING")
                 return 'CONTROL_ROUTING'
+            
             return current_state
         
         # 3. CONTROL_ROUTING: 中控智能体路由到具体章节

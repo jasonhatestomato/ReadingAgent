@@ -8,7 +8,7 @@
     "max_tokens": 8000
   },
   "deepseek": {
-    "api_key": "",
+    "api_key": "ms-ef192e5a-b4c3-4efb-9dfd-6aa372d20ef8",
     "base_url": "https://api-inference.modelscope.cn/v1",
     "model": "deepseek-ai/DeepSeek-V3.1",
     "temperature": 0.7,
@@ -44,7 +44,7 @@
     "max_tokens": 8000
   },
   "pdf_converter": {
-    "api_token": "",
+    "api_token": "eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI4ODkwMDcyMSIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc2MTgyNjg0OSwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiMTMwNzcwMTEtOWIxZS00NjNlLTljZWQtOGUxMWU5ZGY2MjY0IiwiZW1haWwiOiIiLCJleHAiOjE3NjMwMzY0NDl9.4bJWkyRZFuFG1hsW1yloCZzD2a3bVowRLBy0x6kKbpmkKflwJGxPLJNl99OSmf9cNV8yKFFHQID-xkUeOjdNbA",
     "base_url": "https://mineru.net/api/v4/extract",
     "enable_ocr": true,
     "enable_formula": false,

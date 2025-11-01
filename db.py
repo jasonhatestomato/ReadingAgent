@@ -92,7 +92,8 @@ class DatabaseManager:
                 'method': False,
                 'result': False,
                 'discussion': False
-            }
+            },
+            'mindmap_outline': None  # 思维导图大纲缓存
         }
         
         with self.get_connection() as conn:

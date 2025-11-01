@@ -50,14 +50,16 @@ class PDFConverter:
     
     def convert_pdf_to_markdown(
         self,
-        pdf_path: str,
+        pdf_path: str = None,
+        pdf_url: str = None,
         output_path: Optional[str] = None
     ) -> str:
         """
         将 PDF 转换为 Markdown
         
         Args:
-            pdf_path: PDF 文件路径
+            pdf_path: PDF 文件路径（本地文件）
+            pdf_url: PDF 文件URL（阿里云OSS等公网URL）
             output_path: 输出的 Markdown 文件路径（可选）
         
         Returns:
@@ -67,35 +69,52 @@ class PDFConverter:
             FileNotFoundError: PDF 文件不存在
             Exception: 转换失败
         """
-        pdf_path = Path(pdf_path)
-        
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDF 文件不存在: {pdf_path}")
-        
-        # 如果没有指定输出路径，使用相同文件名
-        if output_path is None:
-            output_path = pdf_path.with_suffix('.md')
-        else:
-            output_path = Path(output_path)
-        
-        try:
-            # 1. 上传 PDF 到临时 URL
-            print(f"📤 上传 PDF 文件: {pdf_path}")
-            pdf_url = self._upload_pdf_to_temp_url(str(pdf_path))
+        # 如果提供了URL，直接使用
+        if pdf_url:
+            print(f"📤 使用提供的 PDF URL: {pdf_url}")
+            final_pdf_url = pdf_url
             
-            if not pdf_url:
+            # 如果没有指定输出路径，从URL提取文件名
+            if output_path is None:
+                filename = pdf_url.split('/')[-1].replace('.pdf', '.md')
+                output_path = Path(filename)
+            else:
+                output_path = Path(output_path)
+        
+        # 否则使用本地文件路径
+        elif pdf_path:
+            pdf_path = Path(pdf_path)
+            
+            if not pdf_path.exists():
+                raise FileNotFoundError(f"PDF 文件不存在: {pdf_path}")
+            
+            # 如果没有指定输出路径，使用相同文件名
+            if output_path is None:
+                output_path = pdf_path.with_suffix('.md')
+            else:
+                output_path = Path(output_path)
+            
+            # 上传 PDF 到临时 URL
+            print(f"📤 上传 PDF 文件: {pdf_path}")
+            final_pdf_url = self._upload_pdf_to_temp_url(str(pdf_path))
+            
+            if not final_pdf_url:
                 raise Exception("PDF 文件上传失败")
             
-            print(f"✅ PDF 上传成功: {pdf_url}")
-            
-            # 2. 创建转换任务
+            print(f"✅ PDF 上传成功: {final_pdf_url}")
+        
+        else:
+            raise ValueError("必须提供 pdf_path 或 pdf_url 参数之一")
+        
+        try:
+            # 创建转换任务
             print(f"🔄 创建转换任务...")
-            task_result = self._create_conversion_task(pdf_url)
+            task_result = self._create_conversion_task(final_pdf_url)
             
             if not task_result.get("success"):
                 raise Exception(f"创建转换任务失败: {task_result.get('error')}")
             
-            # 3. 获取任务 ID
+            # 获取任务 ID
             task_data = task_result["data"].get("data", {})
             task_id = task_data.get("task_id") or task_data.get("id")
             
@@ -104,26 +123,26 @@ class PDFConverter:
             
             print(f"✅ 任务创建成功，ID: {task_id}")
             
-            # 4. 等待任务完成
+            # 等待任务完成
             print(f"⏳ 等待转换完成（最长 {self.max_wait_seconds} 秒）...")
             completion_result = self._wait_for_completion(task_id)
             
             if not completion_result.get("success"):
                 raise Exception(f"转换失败: {completion_result.get('message')}")
             
-            # 5. 提取 Markdown 内容
+            # 提取 Markdown 内容
             print(f"📄 提取 Markdown 内容...")
             markdown_content = self._get_markdown_content(completion_result)
             
             if not markdown_content:
                 raise Exception("无法获取 Markdown 内容")
             
-            # 6. 保存 Markdown 文件
+            # 保存 Markdown 文件
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
             
-            print(f"✅ PDF 转换成功: {pdf_path} → {output_path}")
+            print(f"✅ PDF 转换成功 → {output_path}")
             return str(output_path)
         
         except Exception as e:

@@ -60,6 +60,51 @@ def get_sessions():
         print(f"获取会话列表失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/oss-config', methods=['GET'])
+def get_oss_config():
+    """获取OSS配置信息供前端直传使用"""
+    try:
+        # 读取OSS配置
+        import json
+        from pathlib import Path
+        
+        config_dir = Path(__file__).parent / 'config' / 'oss'
+        
+        # 读取bucket信息
+        with open(config_dir / 'info', 'r', encoding='utf-8') as f:
+            info_lines = f.readlines()
+            bucket = info_lines[0].split('：')[1].strip()
+            region = info_lines[1].split('：')[1].strip()
+        
+        # 读取AccessKey
+        with open(config_dir / 'AccessKey.csv', 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            access_key_id, access_key_secret = lines[1].strip().split(',')
+        
+        # 生成OSS endpoint
+        region_map = {
+            '华东2（上海）': 'oss-cn-shanghai',
+            '华北2（北京）': 'oss-cn-beijing',
+            '华东1（杭州）': 'oss-cn-hangzhou',
+            '华南1（深圳）': 'oss-cn-shenzhen'
+        }
+        
+        endpoint = f"https://{region_map.get(region, 'oss-cn-shanghai')}.aliyuncs.com"
+        
+        return jsonify({
+            'success': True,
+            'config': {
+                'accessKeyId': access_key_id,
+                'accessKeySecret': access_key_secret,
+                'bucket': bucket,
+                'region': region,
+                'endpoint': endpoint
+            }
+        })
+    except Exception as e:
+        print(f"获取OSS配置失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/session/<session_id>', methods=['GET'])
 def get_session(session_id):
     """获取单个会话详情"""
@@ -79,41 +124,38 @@ def get_session(session_id):
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
-    """上传 PDF 文件并转换为 Markdown"""
+    """接收前端上传到OSS后的URL并转换为 Markdown"""
     try:
-        # 检查文件
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': '没有文件'}), 400
+        data = request.get_json()
         
-        file = request.files['file']
-        user_id = request.form.get('user_id')
+        # 从前端获取参数
+        user_id = data.get('user_id')
+        pdf_url = data.get('pdf_url')  # 前端上传到OSS后的公网URL
+        title = data.get('title', '')
         
         if not user_id:
             return jsonify({'success': False, 'error': '缺少 user_id'}), 400
         
-        if file.filename == '':
-            return jsonify({'success': False, 'error': '没有选择文件'}), 400
+        if not pdf_url:
+            return jsonify({'success': False, 'error': '缺少 pdf_url'}), 400
         
-        # 检查文件格式
-        if not file.filename.lower().endswith('.pdf'):
+        # 检查URL格式
+        if not pdf_url.lower().endswith('.pdf'):
             return jsonify({'success': False, 'error': '只支持 PDF 文件'}), 400
         
-        # 保存文件
-        filename = secure_filename(file.filename)
-        file_path = UPLOAD_CONFIG['upload_folder'] / filename
-        file.save(str(file_path))
-        
-        # 提取文件标题（简单处理）
-        title = filename.replace('.pdf', '')
+        # 如果没有提供标题，从URL提取
+        if not title:
+            title = pdf_url.split('/')[-1].replace('.pdf', '')
         
         # 转换 PDF 为 Markdown
         markdown_path = None
         if PDF_CONVERTER_AVAILABLE:
             try:
-                markdown_filename = filename.replace('.pdf', '.md')
+                markdown_filename = title.replace(' ', '_') + '.md'
                 markdown_output = UPLOAD_CONFIG['markdown_folder'] / markdown_filename
+                # 直接使用OSS URL进行转换
                 markdown_path = pdf_converter.convert_pdf_to_markdown(
-                    pdf_path=str(file_path),
+                    pdf_url=pdf_url,  # 直接传递URL
                     output_path=str(markdown_output)
                 )
                 print(f"✅ PDF 转换为 Markdown: {markdown_path}")
@@ -121,13 +163,13 @@ def upload_file():
                 print(f"⚠️  PDF 转 Markdown 失败（将继续）: {e}")
                 # 转换失败不影响会话创建
         else:
-            print("⚠️  PDF 转换功能未启用（PyMuPDF 未安装）")
+            print("⚠️  PDF 转换功能未启用")
         
         # 创建会话
         session_id = db.create_session(
             user_id=user_id,
             title=title,
-            paper_path=str(file_path),
+            paper_path=pdf_url,  # 保存OSS URL而非本地路径
             markdown_path=markdown_path
         )
         
@@ -135,7 +177,7 @@ def upload_file():
             'success': True,
             'session_id': session_id,
             'title': title,
-            'pdf_url': f'/uploads/{filename}',
+            'pdf_url': pdf_url,
             'has_markdown': markdown_path is not None
         })
     except Exception as e:
@@ -288,6 +330,128 @@ def convert_to_markdown():
         })
     except Exception as e:
         print(f"转换接口调用失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/generate-mindmap', methods=['POST'])
+def generate_mindmap():
+    """生成思维导图（Markdown 大纲）"""
+    global orchestrator
+    
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('session_id') or request.args.get('session_id')
+        
+        # 尝试从前端获取 session_id
+        if not session_id and hasattr(request, 'referrer'):
+            # 可以从 localStorage 或当前会话获取
+            pass
+        
+        # 如果没有提供 session_id，尝试获取最近的会话
+        if not session_id:
+            # 这里可以根据实际情况调整逻辑
+            return jsonify({
+                'success': False,
+                'error': '缺少 session_id，请先上传论文'
+            }), 400
+        
+        # 获取会话数据
+        session_data = db.get_session(session_id)
+        if not session_data:
+            return jsonify({'success': False, 'error': '会话不存在'}), 404
+        
+        # 检查是否已有缓存的思维导图
+        session_dict = session_data.get('session_data', {})
+        cached_mindmap = session_dict.get('mindmap_outline')
+        
+        if cached_mindmap:
+            print("✅ 返回缓存的思维导图")
+            return jsonify({
+                'success': True,
+                'markdown': cached_mindmap,
+                'from_cache': True
+            })
+        
+        # 检查智能体编排器
+        if orchestrator is None:
+            return jsonify({
+                'success': False,
+                'error': '智能体编排器未初始化'
+            }), 500
+        
+        # 构建用于生成思维导图的 Prompt
+        mindmap_prompt = """你是一个专业的学术论文分析助手。请基于提供的论文内容，生成一份简洁的思维导图大纲。
+
+要求：
+1. 使用 Markdown 标题格式（# ## ### ####）
+2. 结构清晰，层级分明（建议 2-4 层）
+3. 每个节点简洁明了（5-10个字）
+4. 涵盖论文的核心结构：研究背景、研究问题、研究方法、主要发现、研究结论
+5. 不要添加任何解释性文字，只输出 Markdown 格式的大纲
+
+示例格式：
+# 论文标题
+## 研究背景
+### 理论基础
+### 研究现状
+## 研究问题
+### 核心问题
+### 研究假设
+## 研究方法
+### 实验设计
+### 数据采集
+## 主要发现
+### 发现一
+### 发现二
+## 研究结论
+### 理论贡献
+### 实践意义
+"""
+        
+        # 构建上下文
+        from agent_orchestrator import orchestrator
+        context = orchestrator._build_context(session_data)
+        
+        # 调用 LLM 生成大纲
+        try:
+            mindmap_outline = orchestrator._call_llm(
+                system_prompt=mindmap_prompt,
+                context=context,
+                user_message="请为这篇论文生成思维导图大纲",
+                chat_history=[]
+            )
+            
+            # 清理可能的多余内容（只保留 Markdown 标题）
+            lines = mindmap_outline.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                stripped = line.strip()
+                # 只保留以 # 开头的标题行和空行
+                if stripped.startswith('#') or stripped == '':
+                    cleaned_lines.append(line)
+            
+            mindmap_outline = '\n'.join(cleaned_lines).strip()
+            
+            # 缓存到数据库
+            session_dict['mindmap_outline'] = mindmap_outline
+            db.update_session(session_id, session_data=session_dict)
+            
+            print("✅ 思维导图大纲生成成功")
+            
+            return jsonify({
+                'success': True,
+                'markdown': mindmap_outline,
+                'from_cache': False
+            })
+            
+        except Exception as e:
+            print(f"❌ 生成思维导图失败: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'生成失败: {str(e)}'
+            }), 500
+        
+    except Exception as e:
+        print(f"思维导图接口失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/proactive-summary', methods=['POST'])

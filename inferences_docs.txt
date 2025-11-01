@@ -1,0 +1,412 @@
+# ReadingAgent API 接口文档
+
+**版本**: 1.0  
+**最后更新**: 2025-10-31
+
+---
+
+## 概述
+
+本文档为 ReadingAgent 项目的前端开发团队提供后端 API 接口的详细说明。前端团队可以利用这些接口实现文件上传、会话管理、实时聊天、思维导图等核心功能。
+
+### 核心概念: `session_id`
+
+`session_id` 是维系一次完整论文阅读对话的**唯一标识符**，也是所有接口交互的**核心凭证**。
+
+- **生命周期**: 一次会话从用户上传一篇新论文开始，直到对话结束。
+- **作用**: 它将一篇特定的论文、相关的聊天记录、生成的思维导图以及智能体的内部状态（如当前讨论的重点）绑定在一起。
+- **平台集成**: 在与一个统一的平台集成时，前端或平台方在创建一次新的阅读会话时（例如，通过调用 `/api/upload`），会从响应中获得这个 `session_id`。在后续的每一次请求（如提问、生成思维导图等）中，**都必须携带此 `session_id`**，以便后端能够找到并恢复正确的对话上下文。
+
+**注意**: 用户认证（登录、注册）和完整的用户会话历史管理（如删除、重命名会话）将由前端团队自行实现或由其他服务提供，本文档不包含相关接口。
+
+---
+
+## 业务流程概览
+
+一次完整的论文阅读流程包含以下三个阶段：
+
+```
+阶段 1: 文件上传
+   前端 → POST /api/upload → 后端
+   后端返回: { session_id, title, ... }
+
+阶段 2: PDF 转 Markdown (后端内部处理，前端无感知)
+   后端自动将 PDF 转换为 Markdown 文本
+   耗时约 20-30 秒，在阶段 1 的响应返回前完成
+
+阶段 3: 生成导读报告
+   前端 → POST /api/proactive-summary → 后端
+   后端返回: { summary: "论文概述和阅读建议..." }
+   前端在聊天界面显示导读报告
+```
+
+---
+
+## 1. 文件上传接口
+
+### 1.1. 上传新论文
+
+此接口用于用户上传本地的 PDF 论文文件。后端会接收文件，**同步**将其转换为 Markdown 格式，创建并初始化一个新的阅读会话。
+
+- **URL**: `/api/upload`
+- **Method**: `POST`
+- **Content-Type**: `multipart/form-data`
+
+#### 请求体
+
+| 参数名    | 类型   | 描述                     | 必需 |
+|-----------|--------|--------------------------|------|
+| `file`    | File   | 用户选择的 PDF 文件       | 是   |
+| `user_id` | String | 用户唯一标识             | 是   |
+
+#### 响应体
+
+**成功 (Status: 200)**
+```json
+{
+  "success": true,
+  "session_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "title": "Attention Is All You Need",
+  "pdf_url": "/uploads/Attention_Is_All_You_Need.pdf",
+  "has_markdown": true
+}
+```
+
+**字段说明**:
+- `session_id`: 新创建的会话唯一标识，**后续所有请求必须携带此 ID**
+- `title`: 从文件名提取的论文标题
+- `pdf_url`: PDF 文件在服务器上的访问路径
+- `has_markdown`: 是否成功转换为 Markdown（`true` 表示转换完成）
+
+**失败 (Status: 400/500)**
+```json
+{
+  "success": false,
+  "error": "只支持 PDF 文件"
+}
+```
+
+**注意事项**:
+1. **此接口会阻塞 20-30 秒**，因为后端需要完成 PDF 到 Markdown 的转换
+2. 前端应显示加载状态，提示"正在上传并处理文件..."
+3. 转换过程包括：
+   - 上传 PDF 到临时公网存储
+   - 调用 MinerU API 进行文档解析
+   - 下载并保存 Markdown 结果
+4. 如果 `has_markdown: false`，表示转换失败，但会话仍然创建成功
+
+---
+
+## 2. 导读报告生成接口
+
+### 2.1. 生成导读报告
+
+上传文件成功后，前端应立即调用此接口生成论文的导读报告。导读报告是用户与智能体的**第一次交互**，包含论文概述、核心贡献、阅读建议等内容。
+
+- **URL**: `/api/proactive-summary`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### 请求体
+
+```json
+{
+  "session_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+}
+```
+
+#### 响应体
+
+**成功 (Status: 200)**
+```json
+{
+  "success": true,
+  "summary": "# 论文导读\n\n您好！我是您的论文阅读助手...\n\n## 论文概述\n这篇论文提出了 Transformer 架构...\n\n## 核心贡献\n1. 提出了完全基于注意力机制的模型\n2. 在机器翻译任务上达到了 SOTA...\n\n## 阅读建议\n建议您重点关注...",
+  "guiding_questions": {
+    "introduction": "对于引言部分，您有什么问题吗？",
+    "questions": []
+  }
+}
+```
+
+**字段说明**:
+- `summary`: 导读报告的完整内容（Markdown 格式），应直接显示在聊天界面
+- `guiding_questions`: 引导性问题（可选，用于提示用户可以问什么）
+
+**失败 (Status: 400/404/500)**
+```json
+{
+  "success": false,
+  "error": "会话不存在"
+}
+```
+
+**注意事项**:
+1. **必须在 `/api/upload` 成功后调用**，否则会话中没有 Markdown 内容
+2. 此接口会调用 LLM 生成报告，**预计耗时 5-15 秒**
+3. 前端应显示加载状态，提示"正在生成导读报告..."
+4. 报告内容会自动保存到会话的聊天历史中
+5. 报告应以 `assistant` 角色的消息显示在聊天界面
+
+---
+
+## 3. 流式聊天接口
+
+### 3.1. 与智能体对话
+
+在导读报告生成后，用户可以开始提问。这是与智能体进行问答的核心接口。前端发送用户消息，后端以**流式响应**（Server-Sent Events）返回模型生成的回答。
+
+- **URL**: `/api/chat/stream`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### 请求体
+
+```json
+{
+  "session_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "message": "这篇文章的主要贡献是什么？"
+}
+```
+
+#### 响应体 (Event Stream)
+
+响应类型为 `text/event-stream`。前端需要监听以下几种事件：
+
+**事件类型 1: `chunk`** - 文本片段
+```
+data: {"event": "chunk", "data": "这篇文章的"}
+data: {"event": "chunk", "data": "主要贡献是..."}
+```
+
+**事件类型 2: `state`** - 状态更新
+```
+data: {"event": "state", "state": "CONTENT_QUESTION"}
+```
+
+**事件类型 3: `route`** - 路由切换
+```
+data: {"event": "route", "route": "content_question", "agent": "method"}
+```
+
+**事件类型 4: `done`** - 响应结束
+```
+data: {"event": "done", "state": "CONVERSATION_TURN_COMPLETED"}
+```
+
+**事件类型 5: `error`** - 错误
+```
+data: {"event": "error", "error": "生成回答时出错，请重试。"}
+```
+
+**前端处理示例**:
+```javascript
+const eventSource = new EventSource('/api/chat/stream');
+
+eventSource.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  
+  if (data.event === 'chunk') {
+    // 追加文本到当前消息
+    currentMessage += data.data;
+  } else if (data.event === 'done') {
+    // 响应完成，渲染 Markdown 和 Mermaid 图表
+    renderMessage(currentMessage);
+    eventSource.close();
+  } else if (data.event === 'error') {
+    // 显示错误
+    showError(data.error);
+    eventSource.close();
+  }
+};
+```
+
+---
+
+## 4. 会话管理接口
+
+### 4.1. 获取用户的会话列表
+
+获取某个用户的所有历史会话列表，按更新时间倒序排列。
+
+- **URL**: `/api/sessions`
+- **Method**: `GET`
+
+#### 请求参数 (Query Parameters)
+
+| 参数名    | 类型   | 描述         | 必需 |
+|-----------|--------|--------------|------|
+| `user_id` | String | 用户唯一标识 | 是   |
+
+#### 响应体
+
+**成功 (Status: 200)**
+```json
+[
+  {
+    "session_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    "title": "Attention Is All You Need",
+    "created_at": "2025-10-31 10:00:00",
+    "updated_at": "2025-10-31 11:30:00"
+  },
+  {
+    "session_id": "b2c3d4e5-f6a7-8901-2345-67890abcdef1",
+    "title": "BERT: Pre-training of Deep Bidirectional Transformers",
+    "created_at": "2025-10-30 15:00:00",
+    "updated_at": "2025-10-30 16:00:00"
+  }
+]
+```
+
+**失败 (Status: 400)**
+```json
+{
+  "success": false,
+  "error": "缺少 user_id 参数。"
+}
+```
+
+---
+
+## 5. 功能性接口
+
+### 5.1. 生成思维导图
+
+为当前会话的论文生成或获取缓存的思维导图（Markdown 大纲格式）。
+
+- **URL**: `/api/generate-mindmap`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### 请求体
+
+```json
+{
+  "session_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+}
+```
+
+#### 响应体
+
+**成功 (Status: 200)**
+```json
+{
+  "success": true,
+  "markdown": "# 论文标题\n## 研究背景\n### 理论基础\n### 研究现状\n## 研究问题\n### 核心问题\n...",
+  "from_cache": true
+}
+```
+
+**字段说明**:
+- `markdown`: Markdown 格式的大纲（使用 `#` `##` `###` 等标题层级）
+- `from_cache`: 
+  - `true` - 从缓存读取（立即返回，<500ms）
+  - `false` - 新生成（调用 LLM，耗时 5-10 秒）
+
+**失败 (Status: 400/500)**
+```json
+{
+  "success": false,
+  "error": "会话不存在"
+}
+```
+
+**注意事项**:
+1. 首次生成会调用 LLM，需要 5-10 秒
+2. 生成后会自动缓存，后续请求立即返回
+3. 前端需要使用 **Markmap** 库将 Markdown 渲染为交互式思维导图
+
+---
+
+### 5.2. 获取论文的 Markdown 全文
+
+获取指定会话对应的论文全文 Markdown 内容。
+
+- **URL**: `/api/get-markdown`
+- **Method**: `GET`
+
+#### 请求参数 (Query Parameters)
+
+| 参数名       | 类型   | 描述   | 必需 |
+|--------------|--------|--------|------|
+| `session_id` | String | 会话ID | 是   |
+
+#### 响应体
+
+**成功 (Status: 200)**
+```json
+{
+  "success": true,
+  "markdown_content": "# Attention Is All You Need\n\n## Abstract\n\nThe dominant sequence transduction models are based on complex recurrent or convolutional neural networks..."
+}
+```
+
+**失败 (Status: 404)**
+```json
+{
+  "success": false,
+  "error": "会话或 Markdown 文件未找到。"
+}
+```
+
+---
+
+## 附录
+
+### A. 关于文件存储
+
+**当前实现（v1.0）**:
+- 前端通过 `multipart/form-data` 上传 PDF 文件给后端
+- 后端负责将文件上传到公网临时存储，并调用 MinerU API 进行转换
+- 前端无需关心文件的公网存储细节
+
+**未来可能的优化（v2.0）**:
+- 如果平台方有统一的文件存储方案（如阿里云 OSS），可以改为：
+  1. 前端先将 PDF 上传到 OSS
+  2. 调用 `/api/upload` 时传递 `pdf_url` 参数而非文件本身
+  3. 后端直接使用该 URL 进行转换
+- 这种方案可以减少后端带宽消耗，提升并发性能
+
+### B. 错误码说明
+
+| HTTP 状态码 | 含义 | 常见原因 |
+|-------------|------|----------|
+| 200 | 成功 | 请求正常处理 |
+| 400 | 请求错误 | 缺少必需参数、文件格式错误 |
+| 404 | 未找到 | session_id 不存在、文件未找到 |
+| 500 | 服务器错误 | PDF 转换失败、LLM 调用失败 |
+
+### C. 前端集成建议
+
+1. **上传流程**:
+   ```javascript
+   // 1. 上传文件
+   const uploadResult = await uploadPDF(file, userId);
+   const sessionId = uploadResult.session_id;
+   
+   // 2. 生成导读报告
+   const summaryResult = await generateSummary(sessionId);
+   displayMessage('assistant', summaryResult.summary);
+   
+   // 3. 用户可以开始提问
+   enableChatInput();
+   ```
+
+2. **流式响应处理**:
+   - 使用 `EventSource` 或 `fetch` 的 stream 模式
+   - 逐字符追加文本，提升用户体验
+   - 在 `done` 事件时渲染 Markdown 和 Mermaid 图表
+
+3. **Mermaid 图表渲染**:
+   - 使用 Mermaid.js v10+ 渲染流程图
+   - 在消息内容中查找 ` ```mermaid ` 代码块
+   - 调用 `mermaid.render()` 将其转换为 SVG
+
+4. **思维导图渲染**:
+   - 使用 Markmap 库（v0.15+）
+   - 将 Markdown 大纲转换为交互式思维导图
+   - 支持缩放、展开/折叠节点
+
+---
+
+**文档结束**

@@ -25,17 +25,27 @@ class AgentOrchestrator:
         if not self.api_key:
             raise ValueError("未设置 API Key，请在 api_config.json 中配置或设置 OPENAI_API_KEY 环境变量")
         
-        # 构建 client 参数
+        # 构建 client 参数（只包含 OpenAI 客户端支持的参数）
         client_kwargs = {
             'api_key': self.api_key,
-            'timeout': OPENAI_CONFIG['timeout']
+            'timeout': OPENAI_CONFIG.get('timeout', 60),
         }
         
-        # 如果有自定义 base_url，添加到参数中
+        # 添加自定义 base_url（如果有）
         if OPENAI_CONFIG.get('base_url'):
             client_kwargs['base_url'] = OPENAI_CONFIG['base_url']
         
-        self.client = OpenAI(**client_kwargs)
+        print(f"🔧 初始化 OpenAI 客户端")
+        print(f"   Base URL: {client_kwargs.get('base_url', 'default')}")
+        print(f"   Model: {OPENAI_CONFIG.get('model')}")
+        
+        try:
+            self.client = OpenAI(**client_kwargs)
+        except Exception as e:
+            print(f"❌ OpenAI 客户端初始化失败: {e}")
+            print(f"   请检查 openai 和 httpx 版本是否匹配")
+            raise
+            
         self.model = OPENAI_CONFIG['model']
         self.temperature = OPENAI_CONFIG['temperature']
         self.max_tokens = OPENAI_CONFIG['max_tokens']
@@ -60,7 +70,8 @@ class AgentOrchestrator:
         """
         current_state = session_data.get('current_state', 'GUIDE_PENDING_REPORT')
         
-        # 关键修改：如果当前状态是任何章节状态，并且用户提出新问题，重新路由
+        # 🔍 如果当前处于章节状态且有新消息，重新进行路由判断
+        # 注意：不包含 GUIDE_PENDING_PLAN，因为需要让 guidance_agent 自己判断场景二/场景三
         chapter_states = ['INTRODUCTION', 'REVIEW', 'METHOD', 'RESULT', 'DISCUSSION', 'CONTROL_ROUTING']
         if current_state in chapter_states and user_message:
             print(f"🔄 检测到新问题，从状态 {current_state} 重新进行路由判断")
@@ -310,9 +321,9 @@ class AgentOrchestrator:
                     markdown_content = f.read()
                     content_length = len(markdown_content)
                     print(f"📋 读取到 Markdown 内容，长度: {content_length} 字符")
-                    # 截取前 10000 字符作为上下文（避免太长）
-                    if len(markdown_content) > 10000:
-                        markdown_content = markdown_content[:10000] + "\n\n... (内容过长，已截断)"
+                    # 截取前 50000 字符作为上下文（增加到 5 倍，约 50KB）
+                    if len(markdown_content) > 50000:
+                        markdown_content = markdown_content[:50000] + "\n\n... (内容过长，已截断)"
                     context_parts.append(f"📝 论文内容:\n{markdown_content}")
             except Exception as e:
                 print(f"⚠️  读取 Markdown 失败: {e}")

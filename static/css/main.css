@@ -65,6 +65,7 @@ body {
 /* 右侧面板标题为按钮留空间 */
 .content-panel .panel-header {
     padding: 12px 16px 12px 56px; /* 左侧留空间 */
+    border-bottom: none; /* 去除下边框 */
 }
 
 .panel-header h6 {
@@ -74,8 +75,8 @@ body {
 
 /* ===== PDF面板样式 ===== */
 .pdf-panel {
-    width: 30%;
-    min-width: 300px;
+    width: 40%;
+    min-width: 350px;
 }
 
 .pdf-panel.collapsed {
@@ -85,7 +86,8 @@ body {
 
 /* ===== 聊天面板样式 ===== */
 .chat-panel {
-    flex: 1;
+    width: 40%;
+    min-width: 350px;
     border-left: 1px solid #e9ecef;
     border-right: 1px solid #e9ecef;
     background-color: white;
@@ -93,8 +95,8 @@ body {
 
 /* ===== 内容面板样式 ===== */
 .content-panel {
-    width: 30%;
-    min-width: 300px;
+    width: 20%;
+    min-width: 250px;
 }
 
 .content-panel.collapsed {
@@ -464,6 +466,7 @@ body {
     color: #6c757d;
 }
 
+/* ===== PDF 相关样式 ===== */
 .pdf-container {
     flex: 1;
     display: flex;
@@ -471,6 +474,7 @@ body {
     overflow: hidden;
 }
 
+/* 旧的 PDF 控制栏样式（保留以防兼容） */
 .pdf-controls {
     display: flex;
     align-items: center;
@@ -480,27 +484,111 @@ body {
     flex-shrink: 0;
 }
 
+/* 新的内联 PDF 控制样式（在 header 内） */
+.pdf-header-with-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.pdf-controls-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.pdf-zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid #dee2e6;
+}
+
+.pdf-controls-inline .btn-sm {
+    padding: 4px 8px;
+    font-size: 13px;
+}
+
 .page-info {
-    font-size: 14px;
+    font-size: 13px;
     color: #495057;
-    margin: 0 8px;
+    min-width: 60px;
+    text-align: center;
+    font-weight: 500;
 }
 
 .pdf-viewer {
     flex: 1;
     overflow: auto;
-    background-color: #f8f9fa;
+    background-color: #f5f5f5;
     display: flex;
     justify-content: center;
     align-items: flex-start;
     padding: 20px;
+    position: relative;
+}
+
+/* PDF Canvas 容器（用于文字层叠加） */
+.pdf-canvas-wrapper {
+    position: relative;
+    display: inline-block;
 }
 
 #pdf-canvas {
-    max-width: 100%;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: block;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     border-radius: 4px;
+    background-color: white;
 }
+
+/* PDF.js 文本层样式 */
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 1;
+    line-height: 1.0;
+    pointer-events: auto;
+    text-align: initial;
+}
+
+.textLayer > span,
+.textLayer > br {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+}
+
+/* 选中文本的样式 */
+.textLayer ::selection {
+    background: rgba(0, 123, 255, 0.3);
+}
+
+.textLayer ::-moz-selection {
+    background: rgba(0, 123, 255, 0.3);
+}
+
+/* 高亮样式 */
+.pdf-highlight {
+    border-radius: 2px;
+    padding: 2px 0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.pdf-highlight:hover {
+    opacity: 0.8;
+}
+
 
 /* ===== 操作台区域样式 ===== */
 .control-panel-content {
@@ -799,7 +887,7 @@ body {
     background: #f8f9fa;
     border-radius: 12px;
     padding: 12px 16px;
-    max-width: 80%;
+    max-width: 90%; /* 从 80% 增加到 90%，更充分利用空间 */
     border: 1px solid #e9ecef;
 }
 
@@ -1077,6 +1165,43 @@ body {
 /* 多选模式下的消息样式调整 */
 .message {
     position: relative;
+}
+
+/* PDF自定义右键菜单 */
+.pdf-context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    min-width: 150px;
+    z-index: 10000;
+    display: none;
+}
+
+.pdf-context-menu.active {
+    display: block;
+}
+
+.pdf-context-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #374151;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.pdf-context-menu-item:hover {
+    background-color: #f3f4f6;
+}
+
+.pdf-context-menu-item i {
+    width: 16px;
+    text-align: center;
 }
 
 /* Toast提示样式 */

@@ -4,29 +4,8 @@ const PanelComponent = {
         <div class="panel-content-wrapper">
             <!-- 控制面板视图 -->
             <div v-if="currentView === 'controls'">
-                <!-- 智能分析区域 -->
-                <div class="analysis-controls" v-show="showAnalysisControls">
-                    <h6 class="mb-3">智能分析</h6>
-                    
-                    <!-- 导读报告 -->
-                    <div class="mb-3">
-                        <button 
-                            class="btn btn-primary btn-sm w-100 mb-2" 
-                            :disabled="!generateSummaryEnabled"
-                            @click="generateSummary"
-                        >
-                            <i class="fas fa-book-reader me-2"></i>生成导读报告
-                        </button>
-                        <small class="text-muted d-block">生成文献概要和引导问题 (消耗token)</small>
-                    </div>
-                    
-                    <div class="analysis-status">
-                        <small class="text-muted">{{ analysisStatusText }}</small>
-                    </div>
-                </div>
-                
                 <!-- 功能按钮网格 -->
-                <div class="function-grid mt-4">
+                <div class="function-grid">
                     <h6 class="mb-3">功能工具</h6>
                     <div class="row g-2">
                         <!-- 第一行 -->
@@ -115,11 +94,6 @@ const PanelComponent = {
             // 视图控制
             currentView: 'controls', // 'controls' | 'mindmap'
             
-            // 分析控制状态
-            showAnalysisControls: false,
-            generateSummaryEnabled: false,
-            analysisStatusText: '上传PDF后可进行智能分析',
-            
             // 功能按钮状态
             mindmapEnabled: false,
             notesEnabled: false,
@@ -140,18 +114,13 @@ const PanelComponent = {
             this.isPdfLoaded = loaded;
             
             if (loaded) {
-                this.showAnalysisControls = true;
-                this.analysisStatusText = 'PDF已上传，文本转换中...';
                 // 重置mindmap状态
                 this.mindmapData = null;
                 this.mindmapError = null;
                 this.currentView = 'controls';
             } else {
-                this.showAnalysisControls = false;
-                this.generateSummaryEnabled = false;
                 this.mindmapEnabled = false;
                 this.notesEnabled = false;
-                this.analysisStatusText = '上传PDF后可进行智能分析';
                 this.mindmapData = null;
                 this.mindmapError = null;
                 this.currentView = 'controls';
@@ -163,34 +132,14 @@ const PanelComponent = {
         // 设置Markdown转换完成状态
         setMarkdownReady(ready) {
             if (ready && this.isPdfLoaded) {
-                this.generateSummaryEnabled = true;
                 this.mindmapEnabled = true;
                 this.notesEnabled = true;
-                this.analysisStatusText = '文本转换完成，可进行智能分析';
             }
             
             console.log('Panel组件Markdown状态更新:', ready, '按钮状态:', {
-                generateSummaryEnabled: this.generateSummaryEnabled,
                 mindmapEnabled: this.mindmapEnabled,
                 notesEnabled: this.notesEnabled
             });
-        },
-        
-        // 生成导读报告
-        generateSummary() {
-            if (!this.generateSummaryEnabled) return;
-            
-            this.analysisStatusText = '正在生成导读报告...';
-            this.generateSummaryEnabled = false;
-            
-            // 调用全局函数
-            if (window.triggerSummaryGeneration) {
-                window.triggerSummaryGeneration();
-            } else {
-                console.error('triggerSummaryGeneration函数未找到');
-                this.analysisStatusText = '生成失败，请重试';
-                this.generateSummaryEnabled = true;
-            }
         },
         
         // 处理mindmap点击
@@ -276,8 +225,27 @@ const PanelComponent = {
         
         // 渲染mindmap
         async renderMindmap() {
-            const container = document.getElementById('mindmap-container');
-            if (!container || !this.mindmapData) return;
+            // 等待 DOM 元素真正出现（最多等待 3 秒）
+            let retries = 30; // 30 * 100ms = 3秒
+            let container = null;
+            
+            while (retries > 0 && !container) {
+                container = document.getElementById('mindmap-container');
+                if (!container) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    retries--;
+                }
+            }
+            
+            if (!container) {
+                console.error('❌ Mindmap 容器未找到');
+                return;
+            }
+            
+            if (!this.mindmapData) {
+                console.error('❌ Mindmap 数据为空');
+                return;
+            }
             
             try {
                 console.log('开始渲染思维导图，数据长度:', this.mindmapData.length);

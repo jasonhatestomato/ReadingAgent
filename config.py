@@ -85,6 +85,7 @@ FLASK_CONFIG = {
 CURRENT_PROVIDER = API_CONFIG_DATA.get('api_provider', 'openai')
 CURRENT_API_CONFIG = API_CONFIG_DATA.get(CURRENT_PROVIDER, {})
 
+# OpenAI 客户端配置（只包含支持的参数）
 OPENAI_CONFIG = {
     'api_key': CURRENT_API_CONFIG.get('api_key') or os.environ.get('OPENAI_API_KEY'),
     'base_url': CURRENT_API_CONFIG.get('base_url', 'https://api.openai.com/v1'),
@@ -95,6 +96,8 @@ OPENAI_CONFIG = {
     'timeout': 60,  # 请求超时（秒）
     'api_version': CURRENT_API_CONFIG.get('api_version'),  # Azure 专用
 }
+# 注意：不要添加 proxies 等参数，OpenAI SDK v1.0+ 不支持
+# 如需代理，请使用环境变量: HTTP_PROXY, HTTPS_PROXY, NO_PROXY
 
 # ========== 智能体映射配置 ==========
 # FSM 状态到智能体的映射

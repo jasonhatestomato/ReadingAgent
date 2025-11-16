@@ -24,24 +24,9 @@
   "gemini": {
     "api_key": "sk-CyW9puHQwE5io6OwsT039DMFnqFyHJCxG4h49uD8eyEPoENq",
     "base_url": "https://xiaoai.plus/v1",
-    "model": "gemini-2.5-flash-thinking",
+    "model": "gemini-2.5-flash",
     "temperature": 0.7,
-    "max_tokens": 8000
-  },
-  "azure": {
-    "api_key": "",
-    "base_url": "",
-    "model": "gpt-4",
-    "api_version": "2024-02-15-preview",
-    "temperature": 0.7,
-    "max_tokens": 8000
-  },
-  "custom": {
-    "api_key": "",
-    "base_url": "",
-    "model": "gpt-4",
-    "temperature": 0.7,
-    "max_tokens": 8000
+    "max_tokens": 32000
   },
   "pdf_converter": {
     "api_token": "eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI4ODkwMDcyMSIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc2MTgyNjg0OSwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiMTMwNzcwMTEtOWIxZS00NjNlLTljZWQtOGUxMWU5ZGY2MjY0IiwiZW1haWwiOiIiLCJleHAiOjE3NjMwMzY0NDl9.4bJWkyRZFuFG1hsW1yloCZzD2a3bVowRLBy0x6kKbpmkKflwJGxPLJNl99OSmf9cNV8yKFFHQID-xkUeOjdNbA",

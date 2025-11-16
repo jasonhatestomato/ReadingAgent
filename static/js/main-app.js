@@ -11,6 +11,8 @@ let pageNumPending = null;
 let scale = 1.5;
 let canvas = null;
 let ctx = null;
+let renderRetryCount = 0; // 渲染重试计数器
+const MAX_RENDER_RETRIES = 10; // 最大重试次数
 
 // 初始化应用
 document.addEventListener('DOMContentLoaded', function() {
@@ -60,12 +62,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 初始化PDF.js
 function initializePdfJs() {
+    // 配置 worker 和 CMap 支持
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    
+    // 配置 CMap 以支持中文字符（重要！）
+    pdfjsLib.GlobalWorkerOptions.cMapUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/';
+    pdfjsLib.GlobalWorkerOptions.cMapPacked = true;
     
     canvas = document.getElementById('pdf-canvas');
     ctx = canvas.getContext('2d');
     
-    console.log('PDF.js 初始化完成');
+    console.log('PDF.js 初始化完成（已启用 CMap 支持）');
 }
 
 // 初始化文件上传
@@ -214,6 +221,20 @@ async function handleLocalPaperSelect(filename) {
             console.log('Session ID:', data.session_id);
         }
         
+        // 先更新Vue状态以显示PDF容器（重要：必须在加载PDF之前）
+        if (window.layoutApp) {
+            window.layoutApp.pdfLoaded = true;
+        }
+        if (window.vueChat) {
+            window.vueChat.chatHistory = [];
+            window.vueChat.pdfLoaded = true;
+            window.vueChat.sessionId = data.session_id;
+            window.currentSessionId = data.session_id;
+        }
+        
+        // 等待Vue渲染容器
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         // 加载PDF（如果有）
         if (data.has_pdf) {
             // 如果文件名是 .md 结尾，需要转换为 .pdf
@@ -233,14 +254,8 @@ async function handleLocalPaperSelect(filename) {
             uploadSection.style.display = 'none';
         }
         
-        // 更新Vue应用状态
-        if (window.layoutApp) {
-            window.layoutApp.pdfLoaded = true;
-        }
+        // 启用聊天输入框
         if (window.vueChat) {
-            // 重要：清空旧的聊天历史，因为这是新会话
-            window.vueChat.chatHistory = [];
-            window.vueChat.pdfLoaded = true;
             window.vueChat.sessionId = data.session_id;
             // 同时设置全局 sessionId，供 Panel 组件使用
             window.currentSessionId = data.session_id;
@@ -411,30 +426,68 @@ function validateFile(file) {
 async function handleFileUpload(file) {
     console.log('开始处理文件:', file.name, '大小:', formatFileSize(file.size));
     
-    showLoading(true, '正在上传文件...');
+    showLoading(true, '正在上传文件到OSS...');
     
     try {
         // 获取 user_id
         const userId = localStorage.getItem('user_id') || 'default_user';
         
-        // 创建FormData，使用正确的字段名
-        const formData = new FormData();
-        formData.append('file', file); // 后端期望的字段名是'file'
-        formData.append('user_id', userId); // 添加 user_id
+        // 1. 获取 OSS 配置
+        console.log('📡 获取OSS配置...');
+        const ossConfigResponse = await fetch('/api/oss-config');
+        if (!ossConfigResponse.ok) {
+            throw new Error('获取OSS配置失败');
+        }
+        const ossConfigData = await ossConfigResponse.json();
+        const ossConfig = ossConfigData.config;
         
-        // 上传文件到后端
+        // 2. 使用 OSS SDK 上传文件到阿里云
+        console.log('📤 上传文件到阿里云OSS...');
+        const OSS = window.OSS; // 需要在 HTML 中引入 OSS SDK
+        
+        if (!OSS) {
+            throw new Error('阿里云 OSS SDK 未加载，请检查 index.html 中是否引入了 aliyun-oss-sdk');
+        }
+        
+        const client = new OSS({
+            region: 'oss-cn-shanghai',  // 直接使用 region endpoint
+            accessKeyId: ossConfig.accessKeyId,
+            accessKeySecret: ossConfig.accessKeySecret,
+            bucket: ossConfig.bucket
+        });
+        
+        // 生成唯一文件名
+        const timestamp = Date.now();
+        const randomStr = Math.random().toString(36).substring(2, 8);
+        const fileName = `papers/${timestamp}_${randomStr}_${file.name}`;
+        
+        // 上传到 OSS（Bucket 需要设置为公共读或公共读写）
+        const ossResult = await client.put(fileName, file);
+        const pdfUrl = ossResult.url;
+        
+        console.log('✅ OSS 上传成功:', pdfUrl);
+        
+        // 3. 将 OSS URL 发送给后端
+        showLoading(true, '正在处理文件...');
         const uploadResponse = await fetch('/api/upload', {
             method: 'POST',
-            body: formData
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                pdf_url: pdfUrl,
+                title: file.name.replace('.pdf', '')
+            })
         });
         
         if (!uploadResponse.ok) {
             const errorData = await uploadResponse.json();
-            throw new Error(errorData.error || '文件上传失败');
+            throw new Error(errorData.error || '文件处理失败');
         }
         
         const result = await uploadResponse.json();
-        console.log('文件上传成功:', result);
+        console.log('文件处理成功:', result);
         
         // 保存 session_id
         if (result.session_id) {
@@ -507,7 +560,15 @@ async function loadPdfDocument(file) {
         fileReader.onload = async function(e) {
             try {
                 const typedarray = new Uint8Array(e.target.result);
-                pdfDoc = await pdfjsLib.getDocument(typedarray).promise;
+                
+                // 配置 CMap 支持以正确显示中文
+                const loadingTask = pdfjsLib.getDocument({
+                    data: typedarray,
+                    cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                    cMapPacked: true
+                });
+                
+                pdfDoc = await loadingTask.promise;
                 
                 console.log('PDF文档加载成功，总页数:', pdfDoc.numPages);
                 
@@ -550,7 +611,63 @@ async function renderPage(num) {
         const page = await pdfDoc.getPage(num);
         console.log('页面获取成功');
         
-        const viewport = page.getViewport({ scale });
+        // 获取容器尺寸（用于计算缩放比例）- 使用 .pdf-viewer 而不是 canvas 的直接父元素
+        const container = document.querySelector('.pdf-viewer');
+        if (!container) {
+            console.error('未找到 .pdf-viewer 容器');
+            pageRendering = false;
+            renderRetryCount = 0;
+            return;
+        }
+        
+        let containerWidth = container.clientWidth - 40; // 减去 padding
+        let containerHeight = container.clientHeight - 40; // 减去 padding
+        
+        // 如果容器尺寸为0，说明可能还没显示，等待一下再重试
+        if (containerWidth <= 0 || containerHeight <= 0) {
+            if (renderRetryCount >= MAX_RENDER_RETRIES) {
+                console.error('容器尺寸获取失败，已达到最大重试次数');
+                pageRendering = false;
+                renderRetryCount = 0;
+                return;
+            }
+            
+            renderRetryCount++;
+            console.log(`容器尺寸为0，等待100ms后重试... (${renderRetryCount}/${MAX_RENDER_RETRIES})`);
+            pageRendering = false;
+            await new Promise(resolve => setTimeout(resolve, 100));
+            return renderPage(num);
+        }
+        
+        // 重置重试计数器
+        renderRetryCount = 0;
+        
+        console.log('容器尺寸:', containerWidth, 'x', containerHeight);
+        
+        // 获取原始页面尺寸
+        const originalViewport = page.getViewport({ scale: 1.0 });
+        console.log('原始页面尺寸:', originalViewport.width, 'x', originalViewport.height);
+        
+        // 垂直优先适应：优先让高度填满容器，如果宽度超出则按宽度限制
+        let baseScale;
+        const scaleToFitHeight = containerHeight / originalViewport.height;
+        const scaleToFitWidth = containerWidth / originalViewport.width;
+        
+        // 先尝试用高度缩放
+        baseScale = scaleToFitHeight;
+        // 检查此时宽度是否超出，如果超出则改用宽度缩放
+        if (originalViewport.width * baseScale > containerWidth) {
+            baseScale = scaleToFitWidth;
+        }
+        
+        console.log('高度缩放:', scaleToFitHeight, '宽度缩放:', scaleToFitWidth, '基准缩放:', baseScale);
+        
+        // 应用用户的缩放调整（scale 变量来自缩放按钮）
+        let finalScale = baseScale * scale;
+        
+        console.log('最终缩放:', finalScale);
+        
+        const viewport = page.getViewport({ scale: finalScale });
         console.log('视口:', viewport.width, 'x', viewport.height);
         
         // 设置画布尺寸
@@ -562,9 +679,9 @@ async function renderPage(num) {
         
         console.log('画布尺寸已设置:', canvas.width, 'x', canvas.height);
         
-        const scaledViewport = page.getViewport({ scale: scale * devicePixelRatio });
+        const scaledViewport = page.getViewport({ scale: finalScale * devicePixelRatio });
         
-        // 渲染页面
+        // 渲染页面到画布
         const renderContext = {
             canvasContext: ctx,
             viewport: scaledViewport
@@ -575,6 +692,9 @@ async function renderPage(num) {
         
         console.log(`✅ 页面 ${num} 渲染完成`);
         
+        // 渲染文本层
+        await renderTextLayer(page, viewport);
+        
     } catch (error) {
         console.error('❌ 页面渲染失败:', error);
     } finally {
@@ -584,6 +704,50 @@ async function renderPage(num) {
             renderPage(pageNumPending);
             pageNumPending = null;
         }
+    }
+}
+
+// 渲染文本层
+async function renderTextLayer(page, viewport) {
+    try {
+        // 获取 canvas 的包装容器
+        const canvasWrapper = document.getElementById('pdf-canvas-wrapper');
+        if (!canvasWrapper) {
+            console.warn('未找到 canvas 包装容器');
+            return;
+        }
+        
+        // 移除旧的文本层
+        const oldTextLayer = canvasWrapper.querySelector('.textLayer');
+        if (oldTextLayer) {
+            oldTextLayer.remove();
+        }
+        
+        // 创建文本层容器
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.className = 'textLayer';
+        textLayerDiv.style.width = viewport.width + 'px';
+        textLayerDiv.style.height = viewport.height + 'px';
+        // 设置 CSS 变量以避免 PDF.js 警告
+        textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
+        
+        // 将文本层添加到 canvas 包装容器
+        canvasWrapper.appendChild(textLayerDiv);
+        
+        // 获取文本内容
+        const textContent = await page.getTextContent();
+        
+        // 渲染文本层
+        pdfjsLib.renderTextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport: viewport,
+            textDivs: []
+        });
+        
+        console.log('✅ 文本层渲染完成');
+    } catch (error) {
+        console.error('❌ 文本层渲染失败:', error);
     }
 }
 
@@ -892,7 +1056,7 @@ async function triggerMarkdownConversion(silent = false) {
         }
         
         // 调用转换API
-        const response = await fetch('/convert_to_markdown', {
+        const response = await fetch('/api/convert-to-markdown', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1029,10 +1193,18 @@ async function loadHistorySession(sessionId) {
         // 加载 PDF
         if (session.paper_path) {
             let pdfUrl;
-            if (session.paper_path.includes('/local_papers/')) {
+            
+            // 判断是否是 OSS URL（以 http:// 或 https:// 开头）
+            if (session.paper_path.startsWith('http://') || session.paper_path.startsWith('https://')) {
+                // 直接使用 OSS URL
+                pdfUrl = session.paper_path;
+                console.log('检测到 OSS URL:', pdfUrl);
+            } else if (session.paper_path.includes('/local_papers/')) {
+                // 本地示例论文
                 const filename = session.paper_path.split('/').pop();
                 pdfUrl = `/local-papers/${encodeURIComponent(filename)}`;
             } else {
+                // uploads 文件夹（旧的上传方式，已废弃）
                 const filename = session.paper_path.split('/').pop();
                 pdfUrl = `/uploads/${filename}`;
             }
@@ -1056,6 +1228,14 @@ async function loadHistorySession(sessionId) {
         if (window.vueChat) {
             window.vueChat.pdfLoaded = true;
             window.vueChat.sessionId = sessionId;
+        }
+        
+        // 通知Panel组件PDF已加载
+        notifyDocumentStatus(true);
+        
+        // 如果有markdown_path，说明文档已转换，启用mindmap等功能
+        if (session.markdown_path) {
+            notifyMarkdownReady(true);
         }
         
         showLoading(false);
@@ -1083,7 +1263,13 @@ async function loadPdfFromUrl(url) {
             throw new Error('PDF canvas 未找到');
         }
         
-        const loadingTask = pdfjsLib.getDocument(url);
+        // 配置 CMap 支持以正确显示中文
+        const loadingTask = pdfjsLib.getDocument({
+            url: url,
+            cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+            cMapPacked: true
+        });
+        
         pdfDoc = await loadingTask.promise;
         
         console.log('PDF 文档已加载，总页数:', pdfDoc.numPages);
@@ -1108,5 +1294,218 @@ window.readingAgentApp = {
     updatePageInfo,
     loadHistorySession
 };
+
+// ==================== PDF 右键菜单功能 ====================
+
+// 初始化右键菜单
+function initPdfContextMenu() {
+    const contextMenu = document.getElementById('pdf-context-menu');
+    const pdfViewer = document.querySelector('.pdf-viewer'); // 使用 querySelector 而不是 getElementById
+    
+    if (!contextMenu || !pdfViewer) {
+        console.warn('右键菜单或PDF查看器元素未找到，跳过初始化');
+        return;
+    }
+    
+    let selectedText = '';
+    
+    // 监听 PDF 查看器的右键点击
+    pdfViewer.addEventListener('contextmenu', (e) => {
+        // 检查是否点击在文本层上
+        const textLayer = e.target.closest('.textLayer');
+        if (!textLayer) {
+            return; // 不在文本层，允许默认行为
+        }
+        
+        e.preventDefault();
+        
+        // 获取选中的文本
+        selectedText = window.getSelection().toString().trim();
+        
+        if (!selectedText) {
+            return; // 没有选中文本，不显示菜单
+        }
+        
+        // 显示菜单
+        contextMenu.style.left = e.pageX + 'px';
+        contextMenu.style.top = e.pageY + 'px';
+        contextMenu.classList.add('active');
+    });
+    
+    // 点击菜单项
+    contextMenu.addEventListener('click', (e) => {
+        const menuItem = e.target.closest('.pdf-context-menu-item');
+        if (!menuItem) return;
+        
+        const action = menuItem.dataset.action;
+        
+        switch (action) {
+            case 'highlight-yellow':
+                highlightSelectedText('#fef3c7'); // 淡黄色
+                break;
+            case 'highlight-green':
+                highlightSelectedText('#d1fae5'); // 淡绿色
+                break;
+            case 'highlight-blue':
+                highlightSelectedText('#dbeafe'); // 淡蓝色
+                break;
+            case 'copy':
+                copySelectedText();
+                break;
+        }
+        
+        // 隐藏菜单
+        contextMenu.classList.remove('active');
+    });
+    
+    // 点击其他地方隐藏菜单
+    document.addEventListener('click', (e) => {
+        if (!contextMenu.contains(e.target)) {
+            contextMenu.classList.remove('active');
+        }
+    });
+}
+
+// 高亮选中的文本
+function highlightSelectedText(color) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) {
+        console.warn('没有选中的文本');
+        return;
+    }
+    
+    const range = selection.getRangeAt(0);
+    
+    // 获取所有被选中的文本节点
+    const container = range.commonAncestorContainer;
+    const textLayer = container.nodeType === 1 
+        ? container.closest('.textLayer') 
+        : container.parentElement.closest('.textLayer');
+    
+    if (!textLayer) {
+        console.error('未找到文本层');
+        return;
+    }
+    
+    // 遍历文本层中的所有 span 元素
+    const spans = textLayer.querySelectorAll('span');
+    let highlightedCount = 0;
+    
+    spans.forEach(span => {
+        // 检查这个 span 是否与选区有交集
+        const spanRange = document.createRange();
+        spanRange.selectNodeContents(span);
+        
+        // 如果有交集，则高亮
+        if (rangesIntersect(range, spanRange)) {
+            span.style.backgroundColor = color;
+            span.classList.add('pdf-highlight');
+            highlightedCount++;
+        }
+    });
+    
+    console.log(`✅ 已高亮 ${highlightedCount} 个文本片段`);
+    
+    // 清除选区
+    selection.removeAllRanges();
+}
+
+// 检查两个 Range 是否有交集
+function rangesIntersect(range1, range2) {
+    try {
+        // 如果 range2 的结束在 range1 的开始之前，没有交集
+        if (range2.compareBoundaryPoints(Range.END_TO_START, range1) < 0) {
+            return false;
+        }
+        // 如果 range2 的开始在 range1 的结束之后，没有交集
+        if (range2.compareBoundaryPoints(Range.START_TO_END, range1) > 0) {
+            return false;
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// 复制选中的文本
+function copySelectedText() {
+    const text = window.getSelection().toString();
+    if (!text) {
+        console.warn('没有选中的文本');
+        return;
+    }
+    
+    // 尝试使用现代 API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('✅ 文本已复制到剪贴板');
+            showToast('已复制到剪贴板');
+        }).catch(err => {
+            console.error('复制失败:', err);
+            // 降级到传统方法
+            fallbackCopyText(text);
+        });
+    } else {
+        // 浏览器不支持现代 API，使用传统方法
+        fallbackCopyText(text);
+    }
+}
+
+// 降级复制方法（适用于旧浏览器或非安全上下文）
+function fallbackCopyText(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            console.log('✅ 文本已复制到剪贴板（降级方法）');
+            showToast('已复制到剪贴板');
+        } else {
+            console.error('复制失败');
+            showToast('复制失败，请手动复制');
+        }
+    } catch (err) {
+        console.error('复制失败:', err);
+        showToast('复制失败，请手动复制');
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+// 显示临时提示
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #374151;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        z-index: 10001;
+        animation: slideInRight 0.3s ease-out;
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 2000);
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', () => {
+    initPdfContextMenu();
+});
 
 console.log('Reading Agent v2.0 主应用脚本加载完成');

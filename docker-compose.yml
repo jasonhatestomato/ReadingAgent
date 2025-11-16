@@ -1,0 +1,20 @@
+services:
+  web:
+    build: .
+    container_name: reading_agent_web
+    restart: unless-stopped
+    
+    # 映射服务器的 8082 端口到容器的 5000 端口
+    ports:
+      - "8082:5000"
+
+    # 挂载数据卷：
+    # 我们创建一个 "reading-agent-data" 卷
+    # 并将其挂载到容器内的 /data 目录
+    # 你的 config.py 现在会写入这个卷
+    volumes:
+      - reading-agent-data:/data
+
+# 声明持久化数据卷
+volumes:
+  reading-agent-data:

@@ -316,75 +316,151 @@ const ChatComponent = {
         },
         
         async renderMermaidDiagrams() {
-            // 等待 Mermaid 加载
-            await this.$nextTick();
-            
-            // 检查 Mermaid 是否加载
-            if (!window.mermaid) {
-                console.error('⚠️ Mermaid 库未加载，window.mermaid 为 undefined');
-                return;
-            }
-            
-            console.log('🔍 Mermaid 已加载，开始查找代码块...');
-            
-            // 查找所有 Mermaid 代码块（Marked.js 会将其渲染为 <pre><code class="language-mermaid">）
-            const codeBlocks = document.querySelectorAll('pre code.language-mermaid:not([data-processed])');
-            console.log(`🔍 找到 ${codeBlocks.length} 个 Mermaid 代码块`);
-            
-            if (codeBlocks.length === 0) {
-                return;
-            }
-            
-            // 逐个转换和渲染
-            for (let i = 0; i < codeBlocks.length; i++) {
-                const codeBlock = codeBlocks[i];
-                try {
-                    // 标记为已处理
-                    codeBlock.setAttribute('data-processed', 'true');
-                    
-                    // 获取 Mermaid 代码
-                    const code = codeBlock.textContent.trim();
-                    
-                    // 清理代码：移除可能导致解析错误的字符
-                    const cleanedCode = code
-                        .replace(/[""`´'']/g, '')  // 移除所有类型的引号
-                        .replace(/（/g, '(')        // 统一括号为英文
-                        .replace(/）/g, ')');
-                    
-                    const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
-                    
-                    console.log(`🎨 [${i+1}/${codeBlocks.length}] 渲染图表 ${id}`);
-                    console.log('📝 原始代码:', code.substring(0, 100) + '...');
-                    console.log('🧹 清理后代码:', cleanedCode.substring(0, 100) + '...');
-                    
-                    // 使用 mermaid.render 方法
-                    const { svg } = await window.mermaid.render(id + '-svg', cleanedCode);
-                    
-                    // 创建容器并替换代码块
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'mermaid-wrapper';
-                    wrapper.innerHTML = svg;
-                    
-                    // 替换整个 <pre> 标签
-                    const preElement = codeBlock.parentElement;
-                    preElement.parentElement.replaceChild(wrapper, preElement);
-                    
-                    console.log(`✅ [${i+1}/${codeBlocks.length}] 成功渲染图表 ${id}`);
-                } catch (error) {
-                    console.error(`❌ [${i+1}/${codeBlocks.length}] 渲染图表失败:`, error);
-                    console.error('错误详情:', error.message, error.stack);
-                    codeBlock.removeAttribute('data-processed');
-                    
-                    // 显示错误信息
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'mermaid-error';
-                    errorDiv.style.cssText = 'padding: 10px; background: #fee; border: 1px solid #fcc; border-radius: 4px; margin: 10px 0;';
-                    errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #c00;"></i>
-                        <span style="color: #c00; margin-left: 5px;">图表渲染失败：${error.message || '未知错误'}</span>`;
-                    
-                    const preElement = codeBlock.parentElement;
-                    preElement.parentElement.replaceChild(errorDiv, preElement);
+            try {
+                // 等待 Mermaid 加载
+                await this.$nextTick();
+                
+                // 检查 Mermaid 是否加载
+                if (!window.mermaid) {
+                    console.error('⚠️ Mermaid 库未加载，window.mermaid 为 undefined');
+                    return;
                 }
+                
+                console.log('🔍 Mermaid 已加载，开始查找代码块...');
+                
+                // 查找所有 Mermaid 代码块（Marked.js 会将其渲染为 <pre><code class="language-mermaid">）
+                const codeBlocks = document.querySelectorAll('pre code.language-mermaid:not([data-processed])');
+                console.log(`🔍 找到 ${codeBlocks.length} 个 Mermaid 代码块`);
+                
+                if (codeBlocks.length === 0) {
+                    return;
+                }
+                
+                // 逐个转换和渲染
+                for (let i = 0; i < codeBlocks.length; i++) {
+                    const codeBlock = codeBlocks[i];
+                    try {
+                        // 每个代码块独立处理，失败不影响其他代码块
+                        await this.renderSingleMermaidDiagram(codeBlock, i, codeBlocks.length);
+                    } catch (error) {
+                        console.error(`❌ 渲染第 ${i+1} 个图表时出错:`, error);
+                        // 继续处理下一个，不中断整个流程
+                    }
+                }
+                
+                console.log('✅ Mermaid 图表渲染流程完成（包含成功和失败的）');
+            } catch (error) {
+                console.error('❌ renderMermaidDiagrams 整体流程出错:', error);
+                // 即使整个流程出错，也不抛出异常，避免影响后续逻辑
+            }
+        },
+        
+        async renderSingleMermaidDiagram(codeBlock, index, total) {
+            try {
+                // 标记为已处理
+                codeBlock.setAttribute('data-processed', 'true');
+                
+                // 获取 Mermaid 代码
+                const code = codeBlock.textContent.trim();
+                
+                // 健壮的代码清理和修复
+                let cleanedCode = code
+                    // 1. 移除所有类型的引号
+                    .replace(/[""`´'']/g, '')
+                    // 2. 统一括号为英文
+                    .replace(/（/g, '(')
+                    .replace(/）/g, ')');
+                
+                // 3. 修复节点标签中的括号问题（关键修复！）
+                // 将节点标签中的括号内容移除或转换
+                // 例如：C1[二 (一)教师动机] → C1[二-1 教师动机]
+                cleanedCode = cleanedCode.replace(
+                    /(\w+)\[([^\]]*?)\(([^)]+)\)([^\]]*?)\]/g,
+                    (match, nodeId, before, insideParens, after) => {
+                        // 如果括号内是中文数字或序号，转换为连字符形式
+                        const chineseNums = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9', '十': '10' };
+                        let replacement = insideParens;
+                        if (chineseNums[insideParens]) {
+                            replacement = chineseNums[insideParens];
+                        }
+                        // 用连字符或点号替换括号
+                        const separator = before.trim() ? '-' : '';
+                        return `${nodeId}[${before}${separator}${replacement}${after}]`;
+                    }
+                );
+                
+                // 4. 移除剩余的空括号
+                cleanedCode = cleanedCode.replace(/\(\s*\)/g, '');
+                
+                // 5. 确保所有节点都使用方括号 []，不使用圆括号 ()
+                // 检测并修复意外的圆形节点语法
+                cleanedCode = cleanedCode.replace(
+                    /(\w+)\(([^)]+)\)/g,
+                    (match, nodeId, content) => {
+                        // 如果这不是箭头语法的一部分，转换为方括号
+                        return `${nodeId}[${content}]`;
+                    }
+                );
+                
+                const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+                
+                console.log(`🎨 [${index+1}/${total}] 渲染图表 ${id}`);
+                console.log('📝 原始代码:', code.substring(0, 100) + '...');
+                console.log('🧹 清理后代码:', cleanedCode.substring(0, 100) + '...');
+                
+                // 使用 mermaid.render 方法
+                const { svg } = await window.mermaid.render(id + '-svg', cleanedCode);
+                
+                // 创建容器并替换代码块
+                const wrapper = document.createElement('div');
+                wrapper.className = 'mermaid-wrapper';
+                wrapper.innerHTML = svg;
+                
+                // 替换整个 <pre> 标签
+                const preElement = codeBlock.parentElement;
+                preElement.parentElement.replaceChild(wrapper, preElement);
+                
+                console.log(`✅ [${index+1}/${total}] 成功渲染图表 ${id}`);
+            } catch (error) {
+                console.error(`❌ [${index+1}/${total}] 渲染图表失败:`, error);
+                console.error('错误详情:', error.message, error.stack);
+                
+                // 移除处理标记，防止影响后续逻辑
+                codeBlock.removeAttribute('data-processed');
+                
+                // 获取原始代码用于显示
+                const originalCode = codeBlock.textContent.trim();
+                
+                // 创建友好的错误提示 + 显示原始代码
+                const errorContainer = document.createElement('div');
+                errorContainer.className = 'mermaid-error-container';
+                errorContainer.style.cssText = 'margin: 16px 0;';
+                
+                errorContainer.innerHTML = `
+                    <div style="padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px 8px 0 0;">
+                        <i class="fas fa-exclamation-triangle" style="color: #856404;"></i>
+                        <span style="color: #856404; margin-left: 8px; font-weight: 500;">图表渲染失败，但不影响阅读和提问功能</span>
+                        <details style="margin-top: 8px; color: #666; font-size: 0.9em;">
+                            <summary style="cursor: pointer; user-select: none;">查看错误详情</summary>
+                            <pre style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 0.85em; overflow-x: auto; white-space: pre-wrap;">${error.message || '未知错误'}</pre>
+                        </details>
+                    </div>
+                    <div style="padding: 12px; background: #f8f9fa; border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px;">
+                        <div style="margin-bottom: 8px; color: #6c757d; font-size: 0.9em; font-weight: 500;">
+                            <i class="fas fa-code"></i> 原始 Mermaid 代码：
+                        </div>
+                        <pre style="margin: 0; padding: 12px; background: #ffffff; border: 1px solid #dee2e6; border-radius: 4px; font-size: 0.85em; overflow-x: auto; max-height: 300px; overflow-y: auto;"><code class="language-mermaid">${this.escapeHtml(originalCode)}</code></pre>
+                    </div>
+                `;
+                
+                // 替换原来的代码块
+                const preElement = codeBlock.parentElement;
+                if (preElement && preElement.parentElement) {
+                    preElement.parentElement.replaceChild(errorContainer, preElement);
+                }
+                
+                // 重要：即使渲染失败，也不抛出异常，继续处理其他消息
+                console.log(`⚠️  图表渲染失败已安全处理，不影响后续流程`);
             }
         },
 
@@ -631,6 +707,18 @@ const ChatComponent = {
         // 禁用输入
         disableInput() {
             this.isInputEnabled = false;
+        },
+        
+        // HTML 转义辅助函数（用于安全显示原始代码）
+        escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
     },
     
